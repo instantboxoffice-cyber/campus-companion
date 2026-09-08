@@ -37,7 +37,7 @@ export default function ChatPage() {
     if (!error) setMessages(data)
   }
 
-    async function handleSend(e) {
+  async function handleSend(e) {
     e.preventDefault()
     if (!input.trim() || sending) return
 
@@ -59,7 +59,6 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, userMsg])
 
-    // Build conversation history for Groq: last 10 messages, mapped to role/content
     const history = [...messages, userMsg]
       .slice(-10)
       .map((m) => ({
@@ -69,7 +68,6 @@ export default function ChatPage() {
 
     const { data: sessionData } = await supabase.auth.getSession()
     const accessToken = sessionData.session.access_token
-
 
     const res = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-reminder`,
@@ -102,7 +100,6 @@ export default function ChatPage() {
     const { data: companionMsg } = await supabase
       .from('messages')
       .insert({ user_id: userId, sender: 'companion', content: companionReply })
-
       .select()
       .single()
 
@@ -115,50 +112,85 @@ export default function ChatPage() {
     await supabase.auth.signOut()
   }
 
-
   return (
-    <div className="flex flex-col h-screen bg-white">
-      <div className="bg-primary-dark text-white p-4 flex justify-between items-center gap-3">
-        <h1 className="font-bold">Campus Companion</h1>
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/reminders')} className="text-sm underline">Reminders</button>
-          <button onClick={handleLogout} className="text-sm underline">Log out</button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`max-w-[75%] p-3 rounded-lg ${
-              msg.sender === 'user'
-                ? 'bg-primary text-white ml-auto'
-                : 'bg-bubble-received text-black'
-            }`}
-          >
-            {msg.content}
+    <div className="flex h-screen flex-col bg-slate-100">
+      <header className="border-b border-slate-200 bg-primary-dark px-4 py-3 text-white shadow-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-sky-200">
+              C
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold">Campus Companion</h1>
+              <p className="text-xs text-sky-200">Online now</p>
+            </div>
           </div>
-        ))}
-      </div>
 
-      <form onSubmit={handleSend} className="p-4 border-t flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="e.g. remind me to submit the assignment by 6pm tomorrow"
-          className="flex-1 border rounded-lg px-3 py-2"
-          disabled={sending}
-        />
+          <div className="flex items-center gap-2 text-sm">
+            <button onClick={() => navigate('/reminders')} className="rounded-full border border-white/20 px-3 py-1.5 transition hover:bg-white/10">
+              Reminders
+            </button>
+            <button onClick={handleLogout} className="rounded-full border border-white/20 px-3 py-1.5 transition hover:bg-white/10">
+              Log out
+            </button>
+          </div>
+        </div>
+      </header>
 
-        <button
-          type="submit"
-          disabled={sending}
-          className="bg-primary text-white px-4 py-2 rounded-lg"
-        >
-          {sending ? '...' : 'Send'}
-        </button>
-      </form>
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col bg-white shadow-[0_0_0_1px_rgba(148,163,184,0.1)]">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <span>AI Companion</span>
+          <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">Ready</span>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),transparent_30%)] p-4">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                  msg.sender === 'user'
+                    ? 'bg-primary text-white'
+                    : 'bg-bubble-received text-slate-800'
+                }`}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ))}
+
+          {sending && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl bg-bubble-received px-4 py-2.5 text-sm text-slate-600">
+                Thinking...
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSend} className="border-t border-slate-200 bg-white p-3">
+          <div className="mx-auto flex max-w-5xl gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask me to remind you about something..."
+              className="flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-primary focus:bg-white focus:ring-4 focus:ring-sky-100"
+              disabled={sending}
+            />
+
+            <button
+              type="submit"
+              disabled={sending}
+              className="rounded-full bg-primary px-5 py-3 text-sm font-medium text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {sending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </form>
+      </main>
     </div>
   )
 }
