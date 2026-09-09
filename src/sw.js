@@ -1,3 +1,13 @@
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
+import { clientsClaim } from 'workbox-core'
+
+// Precache the app shell that vite-plugin-pwa injects at build time, so the
+// installed app can launch (and re-launch) even with a flaky connection.
+self.skipWaiting()
+clientsClaim()
+cleanupOutdatedCaches()
+precacheAndRoute(self.__WB_MANIFEST)
+
 self.addEventListener('push', (event) => {
   const payload = event.data?.json?.() ?? {
     title: 'Campus Companion',
@@ -8,8 +18,8 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'Campus Companion'
   const options = {
     body: payload.body || 'You have a reminder.',
-    icon: '/vite.svg',
-    badge: '/vite.svg',
+    icon: '/icon-192.png',
+    badge: '/icon-maskable-192.png',
     data: payload.data || { url: '/' },
   }
 

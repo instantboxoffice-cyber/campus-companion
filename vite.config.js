@@ -9,28 +9,56 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest',
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: false,
       srcDir: 'src',
       filename: 'sw.js',
       devOptions: {
-        enabled: true
+        enabled: true,
+        type: 'module',
       },
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
+        id: '/',
         name: 'Campus Companion',
         short_name: 'Companion',
-        description: 'Your AI reminder companion',
-        theme_color: '#1D9BF0',
-        background_color: '#FFFFFF',
+        description: 'Your AI reminder companion — chat naturally and never miss a deadline.',
+        theme_color: '#0F172A',
+        background_color: '#0F172A',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui'],
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
+        categories: ['productivity', 'education'],
         icons: [
           {
-            src: 'vite.svg',
-            sizes: 'any',
-            type: 'image/svg+xml'
-          }
-        ]
-      }
+            src: 'icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: 'icon-maskable-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: 'icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
     })
   ],
 })

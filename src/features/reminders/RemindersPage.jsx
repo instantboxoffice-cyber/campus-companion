@@ -53,8 +53,8 @@ export default function RemindersPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-white">
-      <header className="flex items-center gap-3 bg-primary-dark px-3 py-3 text-white">
+    <div className="app-screen flex flex-col bg-white">
+      <header className="flex items-center gap-3 bg-primary-dark px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] text-white">
         <button onClick={() => navigate('/chat')} aria-label="Back to chat">
           <BackArrowIcon className="h-5 w-5 text-white/90" />
         </button>

@@ -1,0 +1,18 @@
+
+[functions.parse-reminder]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/parse-reminder/index.ts"
+
+[functions.check-due-reminders]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/check-due-reminders/index.ts"
+
+[functions.send-reminder-push]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/send-reminder-push/index.ts"

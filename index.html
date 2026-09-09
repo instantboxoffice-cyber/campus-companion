@@ -2,9 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- viewport-fit=cover lets the app draw under the notch/home-indicator
+         so we can pad it back out with safe-area-inset-* in CSS instead of
+         leaving a dead white bar. maximum-scale=1 + user-scalable=no stop
+         the double-tap/pinch page-zoom that makes a chat UI feel like a
+         website instead of an app - the actual bug this was covering for
+         (inputs zooming in on focus) is fixed properly in index.css by
+         keeping every input at >=16px, so nothing here is a workaround. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+
+    <meta name="theme-color" content="#0F172A" />
+    <meta name="description" content="Your AI reminder companion — chat naturally and never miss a deadline." />
+
+    <!-- Standalone/home-screen behaviour on iOS Safari, which ignores the
+         Web App Manifest for most of this. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Companion" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Stop iOS/Android auto-linking phone numbers, dates, emails in chat
+         bubbles - they're plain message text here, not tappable actions. -->
+    <meta name="format-detection" content="telephone=no, date=no, email=no" />
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>campus-companion</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <title>Campus Companion</title>
   </head>
   <body>
     <div id="root"></div>

@@ -127,8 +127,8 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-3 bg-primary-dark px-3 py-2.5 text-white">
+    <div className="app-screen flex flex-col overflow-hidden">
+      <header className="flex items-center gap-3 bg-primary-dark px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] text-white">
         <button onClick={() => navigate('/')} aria-label="Back to chats">
           <BackArrowIcon className="h-5 w-5 text-white/90" />
         </button>
@@ -203,13 +203,16 @@ export default function ChatPage() {
         </div>
       </main>
 
-      <form onSubmit={handleSend} className="flex items-end gap-2 bg-slate-100 p-2.5">
+      <form
+        onSubmit={handleSend}
+        className="flex items-end gap-2 bg-slate-100 p-2.5 pb-[calc(env(safe-area-inset-bottom)+0.625rem)]"
+      >
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Message"
-          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-primary"
+          className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-base outline-none transition focus:border-primary"
           disabled={sending}
         />
 

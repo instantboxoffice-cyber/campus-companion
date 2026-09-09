@@ -4,6 +4,7 @@ import ChatListPage from './features/chat/ChatListPage'
 import ChatPage from './features/chat/ChatPage'
 import RemindersPage from './features/reminders/RemindersPage'
 import ProtectedRoute from './routes/ProtectedRoute'
+import InstallPrompt from './components/InstallPrompt'
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           }
         />
       </Routes>
+      <InstallPrompt />
     </BrowserRouter>
   )
 }

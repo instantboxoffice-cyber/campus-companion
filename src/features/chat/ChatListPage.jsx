@@ -43,8 +43,8 @@ export default function ChatListPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-white">
-      <header className="bg-primary-dark px-4 pb-3 pt-5 text-white">
+    <div className="app-screen flex flex-col bg-white">
+      <header className="bg-primary-dark px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] text-white">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Chats</h1>
           <div className="flex items-center gap-4">

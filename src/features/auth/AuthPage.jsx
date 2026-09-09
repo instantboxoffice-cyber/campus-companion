@@ -135,9 +135,12 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-primary-dark text-white">
+    <div className="flex min-h-dvh flex-col bg-primary-dark text-white">
       {stage === 'email' ? (
-        <form onSubmit={handleSendCode} className="flex flex-1 flex-col px-6 pb-10 pt-16">
+        <form
+          onSubmit={handleSendCode}
+          className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] pt-[calc(env(safe-area-inset-top)+4rem)]"
+        >
           <Avatar label="C" size="lg" className="mx-auto" />
 
           <h1 className="mt-8 text-center text-2xl font-semibold">Campus Companion</h1>
@@ -178,7 +181,7 @@ export default function AuthPage() {
           </div>
         </form>
       ) : (
-        <div className="flex flex-1 flex-col px-6 pb-10 pt-16">
+        <div className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] pt-[calc(env(safe-area-inset-top)+4rem)]">
           <h1 className="text-center text-2xl font-semibold">Verify your email</h1>
 
           <button
@@ -194,7 +197,7 @@ export default function AuthPage() {
             Enter the {OTP_LENGTH}-digit code we just emailed you.
           </p>
 
-          <div className="mx-auto mt-10 flex gap-2.5">
+          <div className="mx-auto mt-10 flex w-full max-w-xs justify-center gap-2">
             {digits.map((digit, i) => (
               <input
                 key={i}
@@ -206,7 +209,7 @@ export default function AuthPage() {
                 value={digit}
                 onChange={(e) => handleDigitChange(i, e.target.value)}
                 onKeyDown={(e) => handleDigitKeyDown(i, e)}
-                className="h-14 w-11 rounded-lg border border-white/25 bg-white/5 text-center text-xl font-semibold text-white outline-none transition focus:border-accent focus:bg-white/10"
+                className="h-14 w-full min-w-0 max-w-11 flex-1 rounded-lg border border-white/25 bg-white/5 text-center text-xl font-semibold text-white outline-none transition focus:border-accent focus:bg-white/10"
               />
             ))}
           </div>
