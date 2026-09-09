@@ -80,7 +80,17 @@ Deno.serve(async (req) => {
         results.push({ endpoint: subscription.endpoint, status: "sent" })
       } catch (pushErr) {
         console.error("Push delivery failed", pushErr)
-        results.push({ endpoint: subscription.endpoint, status: "failed" })
+
+        // 404/410 mean the push service has permanently invalidated this
+        // endpoint (user uninstalled, cleared site data, etc). Leaving it
+        // in the table means every future reminder keeps retrying - and
+        // failing against - a subscription that will never work again.
+        const statusCode = pushErr?.statusCode
+        if (statusCode === 404 || statusCode === 410) {
+          await serviceClient.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint)
+        }
+
+        results.push({ endpoint: subscription.endpoint, status: "failed", statusCode })
       }
     }
 

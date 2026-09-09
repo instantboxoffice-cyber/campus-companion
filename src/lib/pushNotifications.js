@@ -1,4 +1,12 @@
 export async function registerPushNotifications(supabase, userId) {
+  if (!window.isSecureContext) {
+    // The Push API is only available on https:// or http://localhost.
+    // Opening the site as http://192.168.x.x:5173 on a phone to test on a
+    // real device - the most common way to actually try this feature -
+    // silently fails this exact check.
+    return { enabled: false, reason: 'Push notifications require HTTPS (or localhost).' }
+  }
+
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     return { enabled: false, reason: 'This browser does not support push notifications.' }
   }
@@ -33,12 +41,20 @@ export async function registerPushNotifications(supabase, userId) {
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   })
 
+  // Use the browser's own toJSON() rather than hand-rolling the key
+  // encoding. It's spec-guaranteed to emit `keys.auth`/`keys.p256dh` as
+  // base64url (the format the `web-push` library on the server expects) -
+  // manually doing `btoa(String.fromCharCode(...))` produces plain base64
+  // instead, which silently corrupts whichever keys happen to contain a
+  // `+`, `/`, or trailing `=`, and that's what was breaking delivery.
+  const { endpoint, keys } = subscription.toJSON()
+
   const { error } = await supabase.from('push_subscriptions').upsert(
     {
       user_id: userId,
-      endpoint: subscription.endpoint,
-      auth: subscription.getKey('auth') ? btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('auth')))) : null,
-      p256dh: subscription.getKey('p256dh') ? btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')))) : null,
+      endpoint,
+      auth: keys?.auth ?? null,
+      p256dh: keys?.p256dh ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'endpoint' }

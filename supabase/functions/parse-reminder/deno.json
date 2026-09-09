@@ -3,6 +3,7 @@
     "@supabase/functions-js": "jsr:@supabase/functions-js@^2",
     "@supabase/server": "npm:@supabase/server@^1",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@^2",
-    "web-push": "npm:web-push@^3.0.0"
+    "web-push": "npm:web-push@^3.0.0",
+    "luxon": "npm:luxon@^3.5.0"
   }
 }

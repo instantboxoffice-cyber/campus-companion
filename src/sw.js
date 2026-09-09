@@ -9,10 +9,11 @@ cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
 self.addEventListener('push', (event) => {
-  const payload = event.data?.json?.() ?? {
-    title: 'Campus Companion',
-    body: 'You have a reminder.',
-    data: { url: '/' },
+  let payload = { title: 'Campus Companion', body: 'You have a reminder.', data: { url: '/' } }
+  try {
+    if (event.data) payload = event.data.json()
+  } catch (err) {
+    console.error('Push payload was not valid JSON:', err)
   }
 
   const title = payload.title || 'Campus Companion'

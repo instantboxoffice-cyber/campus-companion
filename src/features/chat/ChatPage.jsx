@@ -25,9 +25,19 @@ export default function ChatPage() {
       setUserId(nextUserId)
 
       if (nextUserId) {
-        registerPushNotifications(supabase, nextUserId).catch((error) => {
-          console.error('Push registration error:', error)
-        })
+        registerPushNotifications(supabase, nextUserId)
+          .then((result) => {
+            if (!result.enabled) {
+              // Silent failures here are exactly why "push notifications
+              // aren't working" is so hard to debug - most of these
+              // reasons (permission denied, missing VAPID key, no HTTPS)
+              // never throw, they just resolve with enabled: false.
+              console.warn('Push notifications not enabled:', result.reason)
+            }
+          })
+          .catch((error) => {
+            console.error('Push registration error:', error)
+          })
       }
     })
   }, [])
@@ -82,6 +92,14 @@ export default function ChatPage() {
     const { data: sessionData } = await supabase.auth.getSession()
     const accessToken = sessionData.session.access_token
 
+    // The AI never converts times itself - it just needs to know "where
+    // and when" the user currently is, in their own words. Intl gives us
+    // the real IANA zone (handles DST correctly) with no user input.
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const localTime = new Date()
+      .toLocaleString('sv-SE', { timeZone: timezone })
+      .replace(' ', 'T')
+
     const res = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-reminder`,
       {
@@ -90,7 +108,7 @@ export default function ChatPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ history }),
+        body: JSON.stringify({ history, timezone, localTime }),
       }
     )
     const parsed = await res.json()
