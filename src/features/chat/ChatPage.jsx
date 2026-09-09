@@ -61,83 +61,70 @@ export default function ChatPage() {
   }, [messages, sending])
 
   async function handleSend(e) {
-    e.preventDefault()
-    if (!input.trim() || sending) return
+  e.preventDefault()
+  if (!input.trim() || sending) return
 
-    setSending(true)
-    const userText = input.trim()
-    setInput('')
+  setSending(true)
+  const userText = input.trim()
+  setInput('')
 
-    const { data: userMsg, error: userMsgError } = await supabase
-      .from('messages')
-      .insert({ user_id: userId, sender: 'user', content: userText })
-      .select()
-      .single()
+  const { data: userMsg, error: userMsgError } = await supabase
+    .from('messages')
+    .insert({ user_id: userId, sender: 'user', content: userText })
+    .select()
+    .single()
 
-    if (userMsgError) {
-      console.error(userMsgError)
-      setSending(false)
-      return
-    }
-
-    setMessages((prev) => [...prev, userMsg])
-
-    const history = [...messages, userMsg]
-      .slice(-10)
-      .map((m) => ({
-        role: m.sender === 'user' ? 'user' : 'assistant',
-        content: m.content,
-      }))
-
-    const { data: sessionData } = await supabase.auth.getSession()
-    const accessToken = sessionData.session.access_token
-
-    // The AI never converts times itself - it just needs to know "where
-    // and when" the user currently is, in their own words. Intl gives us
-    // the real IANA zone (handles DST correctly) with no user input.
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    const localTime = new Date()
-      .toLocaleString('sv-SE', { timeZone: timezone })
-      .replace(' ', 'T')
-
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-reminder`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ history, timezone, localTime }),
-      }
-    )
-    const parsed = await res.json()
-
-    let companionReply = "Hmm, something went wrong on my end — mind trying that again?"
-
-    if (parsed.reply) {
-      companionReply = parsed.reply
-
-      if (parsed.intent === 'reminder' && parsed.task && parsed.due_at) {
-        await supabase.from('reminders').insert({
-          user_id: userId,
-          task: parsed.task,
-          due_at: parsed.due_at,
-          recurrence: parsed.recurrence,
-        })
-      }
-    }
-
-    const { data: companionMsg } = await supabase
-      .from('messages')
-      .insert({ user_id: userId, sender: 'companion', content: companionReply })
-      .select()
-      .single()
-
-    if (companionMsg) setMessages((prev) => [...prev, companionMsg])
-
+  if (userMsgError) {
+    console.error(userMsgError)
     setSending(false)
+    return
   }
+
+  setMessages((prev) => [...prev, userMsg])
+
+  const history = [...messages, userMsg]
+    .slice(-10)
+    .map((m) => ({
+      role: m.sender === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    }))
+
+  const { data: sessionData } = await supabase.auth.getSession()
+  const accessToken = sessionData.session.access_token
+
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const localTime = new Date()
+    .toLocaleString('sv-SE', { timeZone: timezone })
+    .replace(' ', 'T')
+
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-reminder`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ history, timezone, localTime }),
+    }
+  )
+  const parsed = await res.json()
+
+  // The edge function now saves the companion's reply (and any reminder)
+  // itself, so it lands even if this tab closes before the response
+  // arrives. It hands the saved row back so we show it immediately
+  // without inserting it a second time here.
+  const companionMsg = parsed.message ?? {
+    id: crypto.randomUUID(),
+    user_id: userId,
+    sender: 'companion',
+    content: parsed.reply || "Hmm, something went wrong on my end — mind trying that again?",
+    created_at: new Date().toISOString(),
+  }
+
+  setMessages((prev) => [...prev, companionMsg])
+  setSending(false)
+}
 
   async function handleLogout() {
     await supabase.auth.signOut()

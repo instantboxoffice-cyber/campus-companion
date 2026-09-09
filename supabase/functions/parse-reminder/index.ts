@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { DateTime } from "luxon"
+import { createClient } from "@supabase/supabase-js"
+import { sendPushToUser } from "../_shared/sendPush.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,8 +23,35 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Fall back to UTC if the client somehow didn't send a zone (older
-    // cached build, etc) rather than letting the request fail outright.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+    const authHeader = req.headers.get("Authorization")
+
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !authHeader) {
+      return new Response(JSON.stringify({ error: "Missing auth or Supabase environment values" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    // Resolve who's actually calling from their JWT, rather than trusting
+    // a user_id the client might send. This is the only identity check
+    // that matters here.
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data: { user }, error: userError } = await userClient.auth.getUser()
+
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
+
     const userTimezone = typeof timezone === "string" && timezone ? timezone : "UTC"
     const userLocalTime = typeof localTime === "string" && localTime
       ? localTime
@@ -78,20 +107,12 @@ Rules:
 
     const parsed = JSON.parse(groqData.choices[0].message.content)
 
-    // This is the one place actual timezone math happens - deliberately
-    // outside the LLM. Luxon has real IANA tz-database rules (DST
-    // transitions, historical offset changes, etc), so it converts the
-    // AI's plain local time into the correct UTC instant reliably, every
-    // time - something no amount of prompting can guarantee from a model.
     if (parsed.intent === "reminder" && parsed.due_at) {
       const localDt = DateTime.fromISO(parsed.due_at, { zone: userTimezone })
 
       if (localDt.isValid) {
         parsed.due_at = localDt.toUTC().toISO()
       } else {
-        // The model returned something that isn't a real local time
-        // (e.g. malformed string) - don't silently save a broken
-        // reminder, ask the user to restate it instead.
         parsed.intent = "clarify"
         parsed.task = null
         parsed.due_at = null
@@ -99,11 +120,50 @@ Rules:
       }
     }
 
-    return new Response(JSON.stringify(parsed), {
+    let companionMessage = null
+
+    if (parsed.reply) {
+      if (parsed.intent === "reminder" && parsed.task && parsed.due_at) {
+        const { error: reminderError } = await serviceClient.from("reminders").insert({
+          user_id: user.id,
+          task: parsed.task,
+          due_at: parsed.due_at,
+          recurrence: parsed.recurrence,
+        })
+        if (reminderError) console.error("Failed to save reminder", reminderError)
+      }
+
+      // This insert - and the push below - happen here, server-side,
+      // specifically so they still run even if the tab (or Chrome itself)
+      // closes while Groq is still thinking.
+      const { data, error: messageError } = await serviceClient
+        .from("messages")
+        .insert({ user_id: user.id, sender: "companion", content: parsed.reply })
+        .select()
+        .single()
+
+      if (messageError) console.error("Failed to save companion message", messageError)
+      companionMessage = data
+
+      try {
+        await sendPushToUser(serviceClient, user.id, {
+          title: "Campus Companion",
+          body: parsed.reply,
+          url: "/chat",
+          tag: "companion-chat",
+          type: "chat_reply",
+        })
+      } catch (pushErr) {
+        // A failed push should never take down the chat reply itself.
+        console.error("Push notification failed", pushErr)
+      }
+    }
+
+    return new Response(JSON.stringify({ ...parsed, message: companionMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
