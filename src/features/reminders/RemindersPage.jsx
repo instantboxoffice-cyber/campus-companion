@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
+import { BackArrowIcon, BellIcon, CheckIcon, TrashIcon } from '../../components/Icons'
 
 export default function RemindersPage() {
   const navigate = useNavigate()
@@ -51,91 +52,65 @@ export default function RemindersPage() {
     }
   }
 
-  const upcoming = reminders.filter((reminder) => !reminder.completed).length
-  const completed = reminders.filter((reminder) => reminder.completed).length
-
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="bg-primary-dark px-4 py-4 text-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Your list</p>
-            <h1 className="text-2xl font-semibold">Reminders</h1>
-          </div>
-
-          <button onClick={() => navigate('/')} className="rounded-full border border-white/20 px-3 py-1.5 text-sm transition hover:bg-white/10">
-            Back to chat
-          </button>
-        </div>
+    <div className="flex h-screen flex-col bg-white">
+      <header className="flex items-center gap-3 bg-primary-dark px-3 py-3 text-white">
+        <button onClick={() => navigate('/chat')} aria-label="Back to chat">
+          <BackArrowIcon className="h-5 w-5 text-white/90" />
+        </button>
+        <h1 className="text-lg font-semibold">Reminders</h1>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Upcoming</p>
-            <p className="mt-2 text-3xl font-bold text-primary">{upcoming}</p>
+      <main className="flex-1 overflow-y-auto">
+        {loading ? (
+          <p className="p-4 text-sm text-slate-500">Loading reminders...</p>
+        ) : reminders.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-6 pt-20 text-center text-slate-500">
+            <BellIcon className="h-8 w-8 text-slate-300" />
+            <p className="text-sm">
+              No reminders yet. Ask Campus Companion in chat to set one.
+            </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Completed</p>
-            <p className="mt-2 text-3xl font-bold text-slate-800">{completed}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total</p>
-            <p className="mt-2 text-3xl font-bold text-slate-800">{reminders.length}</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          {loading ? (
-            <p className="text-slate-500">Loading reminders...</p>
-          ) : reminders.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-600">
-              No reminders yet. Ask Campus Companion in chat to create one.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {reminders.map((reminder) => (
-                <div
-                  key={reminder.id}
-                  className={`rounded-xl border p-4 ${
-                    reminder.completed ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'
+        ) : (
+          <ul>
+            {reminders.map((reminder) => (
+              <li
+                key={reminder.id}
+                className="flex items-center gap-3 border-b border-slate-100 px-4 py-3"
+              >
+                <button
+                  onClick={() => toggleReminder(reminder.id, reminder.completed)}
+                  aria-label={reminder.completed ? 'Mark as not done' : 'Mark as done'}
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                    reminder.completed
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-slate-300 text-transparent'
                   }`}
                 >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className={`font-semibold ${reminder.completed ? 'line-through text-slate-500' : 'text-slate-900'}`}>
-                        {reminder.task}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {reminder.due_at ? new Date(reminder.due_at).toLocaleString() : 'No date set'}
-                      </p>
-                      {reminder.recurrence && (
-                        <span className="mt-2 inline-block rounded-full bg-sky-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-                          {reminder.recurrence}
-                        </span>
-                      )}
-                    </div>
+                  <CheckIcon className="h-3.5 w-3.5" />
+                </button>
 
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => toggleReminder(reminder.id, reminder.completed)}
-                        className="rounded-full bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-sky-500"
-                      >
-                        {reminder.completed ? 'Undo' : 'Done'}
-                      </button>
-                      <button
-                        onClick={() => deleteReminder(reminder.id)}
-                        className="rounded-full border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-medium ${reminder.completed ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                    {reminder.task}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {reminder.due_at ? new Date(reminder.due_at).toLocaleString() : 'No date set'}
+                    {reminder.recurrence ? ` · ${reminder.recurrence}` : ''}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+
+                <button
+                  onClick={() => deleteReminder(reminder.id)}
+                  aria-label="Delete reminder"
+                  className="shrink-0 p-1.5 text-slate-400 transition hover:text-red-500"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </main>
     </div>
   )

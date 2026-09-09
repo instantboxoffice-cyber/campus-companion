@@ -7,6 +7,48 @@
   --color-accent: #38BDF8;
 }
 
+/* Chat thread background: an original, lightly-tinted dot pattern that
+   reads as "chat wallpaper" the way WhatsApp's does, without reproducing
+   WhatsApp's actual doodle artwork. */
+.chat-wallpaper {
+  background-color: #EAF4FC;
+  background-image: radial-gradient(rgba(29, 155, 240, 0.14) 1.4px, transparent 1.4px);
+  background-size: 22px 22px;
+}
+
+/* Speech-bubble tails, applied alongside a bg-* utility on the same
+   element - `background: inherit` picks up that element's own
+   background-color for the triangle. */
+.bubble-tail-sent {
+  position: relative;
+  border-top-right-radius: 4px;
+}
+.bubble-tail-sent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -7px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  clip-path: polygon(0 0, 0% 100%, 100% 0);
+}
+
+.bubble-tail-received {
+  position: relative;
+  border-top-left-radius: 4px;
+}
+.bubble-tail-received::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+}
+
 :root {
   font-family: Inter, "Segoe UI", sans-serif;
   line-height: 1.5;

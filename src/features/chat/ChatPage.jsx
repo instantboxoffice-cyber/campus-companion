@@ -1,7 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { registerPushNotifications } from '../../lib/pushNotifications'
+import Avatar from '../../components/Avatar'
+import { BackArrowIcon, CheckIcon, MoreVerticalIcon, SendIcon } from '../../components/Icons'
+
+function formatBubbleTime(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
 
 export default function ChatPage() {
   const navigate = useNavigate()
@@ -9,6 +16,8 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [userId, setUserId] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const scrollRef = useRef(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -23,11 +32,6 @@ export default function ChatPage() {
     })
   }, [])
 
-  useEffect(() => {
-    if (!userId) return
-    loadMessages()
-  }, [userId])
-
   async function loadMessages() {
     const { data, error } = await supabase
       .from('messages')
@@ -36,6 +40,15 @@ export default function ChatPage() {
 
     if (!error) setMessages(data)
   }
+
+  useEffect(() => {
+    if (!userId) return
+    loadMessages()
+  }, [userId])
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages, sending])
 
   async function handleSend(e) {
     e.preventDefault()
@@ -110,87 +123,105 @@ export default function ChatPage() {
 
   async function handleLogout() {
     await supabase.auth.signOut()
+    navigate('/auth', { replace: true })
   }
 
   return (
-    <div className="flex h-screen flex-col bg-slate-100">
-      <header className="border-b border-slate-200 bg-primary-dark px-4 py-3 text-white shadow-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-sky-200">
-              C
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold">Campus Companion</h1>
-              <p className="text-xs text-sky-200">Online now</p>
-            </div>
-          </div>
+    <div className="flex h-screen flex-col">
+      <header className="flex items-center gap-3 bg-primary-dark px-3 py-2.5 text-white">
+        <button onClick={() => navigate('/')} aria-label="Back to chats">
+          <BackArrowIcon className="h-5 w-5 text-white/90" />
+        </button>
 
-          <div className="flex items-center gap-2 text-sm">
-            <button onClick={() => navigate('/reminders')} className="rounded-full border border-white/20 px-3 py-1.5 transition hover:bg-white/10">
-              Reminders
-            </button>
-            <button onClick={handleLogout} className="rounded-full border border-white/20 px-3 py-1.5 transition hover:bg-white/10">
-              Log out
-            </button>
-          </div>
+        <Avatar label="C" size="sm" />
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium leading-tight">Campus Companion</p>
+          <p className="text-xs leading-tight text-sky-200/80">
+            {sending ? 'typing…' : 'online'}
+          </p>
+        </div>
+
+        <div className="relative">
+          <button onClick={() => setMenuOpen((v) => !v)} aria-label="More options">
+            <MoreVerticalIcon className="h-5 w-5 text-white/90" />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-lg bg-white text-sm text-slate-800 shadow-xl">
+                <button
+                  onClick={() => { setMenuOpen(false); navigate('/reminders') }}
+                  className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
+                >
+                  Reminders
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full px-4 py-2.5 text-left text-red-600 hover:bg-slate-50"
+                >
+                  Log out
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col bg-white shadow-[0_0_0_1px_rgba(148,163,184,0.1)]">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          <span>AI Companion</span>
-          <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">Ready</span>
-        </div>
-
-        <div className="flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),transparent_30%)] p-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                  msg.sender === 'user'
-                    ? 'bg-primary text-white'
-                    : 'bg-bubble-received text-slate-800'
-                }`}
-              >
-                {msg.content}
+      <main ref={scrollRef} className="chat-wallpaper flex-1 overflow-y-auto px-3 py-4">
+        <div className="space-y-2.5">
+          {messages.map((msg) => {
+            const isUser = msg.sender === 'user'
+            return (
+              <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[78%] rounded-xl px-3 pb-1.5 pt-2 text-sm shadow-sm ${
+                    isUser
+                      ? 'bubble-tail-sent bg-primary text-white'
+                      : 'bubble-tail-received bg-bubble-received text-slate-800'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  <div className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${isUser ? 'text-sky-100/80' : 'text-slate-400'}`}>
+                    <span>{formatBubbleTime(msg.created_at)}</span>
+                    {isUser && <CheckIcon className="h-3 w-3" />}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
 
           {sending && (
             <div className="flex justify-start">
-              <div className="rounded-2xl bg-bubble-received px-4 py-2.5 text-sm text-slate-600">
-                Thinking...
+              <div className="bubble-tail-received flex items-center gap-1 rounded-xl bg-bubble-received px-3 py-2.5 shadow-sm">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
               </div>
             </div>
           )}
         </div>
-
-        <form onSubmit={handleSend} className="border-t border-slate-200 bg-white p-3">
-          <div className="mx-auto flex max-w-5xl gap-3">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask me to remind you about something..."
-              className="flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-primary focus:bg-white focus:ring-4 focus:ring-sky-100"
-              disabled={sending}
-            />
-
-            <button
-              type="submit"
-              disabled={sending}
-              className="rounded-full bg-primary px-5 py-3 text-sm font-medium text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {sending ? 'Sending...' : 'Send'}
-            </button>
-          </div>
-        </form>
       </main>
+
+      <form onSubmit={handleSend} className="flex items-end gap-2 bg-slate-100 p-2.5">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Message"
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-primary"
+          disabled={sending}
+        />
+
+        <button
+          type="submit"
+          disabled={sending || !input.trim()}
+          aria-label="Send"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <SendIcon className="h-4.5 w-4.5" />
+        </button>
+      </form>
     </div>
   )
 }
