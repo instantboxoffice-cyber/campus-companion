@@ -5,6 +5,7 @@ import ChatPage from './features/chat/ChatPage'
 import RemindersPage from './features/reminders/RemindersPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import InstallPrompt from './components/InstallPrompt'
+import PlaceholderPage from './features/navigation/PlaceholderPage'
 
 function App() {
   return (
@@ -35,6 +36,17 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {['updates', 'communities', 'calls'].map((tab) => (
+          <Route
+            key={tab}
+            path={`/${tab}`}
+            element={
+              <ProtectedRoute>
+                <PlaceholderPage />
+              </ProtectedRoute>
+            }
+          />
+        ))}
       </Routes>
       <InstallPrompt />
     </BrowserRouter>

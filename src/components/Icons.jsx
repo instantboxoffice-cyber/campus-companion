@@ -61,6 +61,66 @@ export function SearchIcon({ className = 'h-5 w-5' }) {
   )
 }
 
+export function CameraIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <circle cx="12" cy="13" r="3.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
+export function ArchiveIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M4 7h16v13H4V7zM3 4h18v3H3V4zM9 11h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function PinIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M15 4l5 5-3 1-3 5 1 1-2 2-2-4-4-2 2-2 1 1 5-3 1-3zM5 19l-2 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function MessageIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v8a2.5 2.5 0 01-2.5 2.5H11l-4.5 4v-4H6.5A2.5 2.5 0 014 13.5v-8z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function UpdatesIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function CommunitiesIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.5 19a5.5 5.5 0 0111 0M15 15a4.5 4.5 0 016 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function CallsIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M6.5 4.5l3 2.5-2 3a14 14 0 006.5 6.5l3-2 2.5 3c.5.6.4 1.5-.2 2-1.2 1-3.1 1.1-4.7.4C8.8 17.9 6.1 15.2 4.1 9.4c-.7-1.6-.6-3.5.4-4.7.5-.6 1.4-.7 2-.2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function BellIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className}>
