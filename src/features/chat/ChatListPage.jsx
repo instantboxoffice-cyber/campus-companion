@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
 import { MoreVerticalIcon, SearchIcon } from '../../components/Icons'
 
+const LAST_READ_KEY = 'companion_last_read_at'
+
 function formatTimestamp(iso) {
   if (!iso) return ''
   const date = new Date(iso)
@@ -16,11 +18,19 @@ function formatTimestamp(iso) {
   return date.toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
+function isUnread(message) {
+  if (!message || message.sender !== 'companion') return false
+  const lastReadAt = localStorage.getItem(LAST_READ_KEY)
+  if (!lastReadAt) return true
+  return new Date(message.created_at) > new Date(lastReadAt)
+}
+
 export default function ChatListPage() {
   const navigate = useNavigate()
   const [lastMessage, setLastMessage] = useState(null)
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [unread, setUnread] = useState(false)
 
   useEffect(() => {
     async function loadLastMessage() {
@@ -30,11 +40,34 @@ export default function ChatListPage() {
         .order('created_at', { ascending: false })
         .limit(1)
 
-      if (!error) setLastMessage(data?.[0] ?? null)
+      if (!error) {
+        const latest = data?.[0] ?? null
+        setLastMessage(latest)
+        setUnread(isUnread(latest))
+      }
       setLoading(false)
     }
 
     loadLastMessage()
+
+    // Live-updates the preview the moment a new message lands - whether
+    // it's the companion's reply finishing in the background or a
+    // message sent from another device - no reopening the chat needed.
+    const channel = supabase
+      .channel('chat-list-messages')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          setLastMessage(payload.new)
+          setUnread(isUnread(payload.new))
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   async function handleLogout() {
@@ -89,15 +122,18 @@ export default function ChatListPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
                 <p className="font-medium text-slate-900">Campus Companion</p>
-                <span className="shrink-0 text-xs text-slate-400">
+                <span className={`shrink-0 text-xs ${unread ? 'font-semibold text-primary' : 'text-slate-400'}`}>
                   {formatTimestamp(lastMessage?.created_at)}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-sm text-slate-500">
-                {lastMessage
-                  ? `${lastMessage.sender === 'user' ? 'You: ' : ''}${lastMessage.content}`
-                  : 'Ask me to remind you about something'}
-              </p>
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <p className={`truncate text-sm ${unread ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
+                  {lastMessage
+                    ? `${lastMessage.sender === 'user' ? 'You: ' : ''}${lastMessage.content}`
+                    : 'Ask me to remind you about something'}
+                </p>
+                {unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />}
+              </div>
             </div>
           </button>
         )}

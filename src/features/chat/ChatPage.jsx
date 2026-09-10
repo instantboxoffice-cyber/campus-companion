@@ -5,6 +5,8 @@ import { registerPushNotifications } from '../../lib/pushNotifications'
 import Avatar from '../../components/Avatar'
 import { BackArrowIcon, CheckIcon, MoreVerticalIcon, SendIcon } from '../../components/Icons'
 
+const LAST_READ_KEY = 'companion_last_read_at'
+
 function formatBubbleTime(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -28,10 +30,6 @@ export default function ChatPage() {
         registerPushNotifications(supabase, nextUserId)
           .then((result) => {
             if (!result.enabled) {
-              // Silent failures here are exactly why "push notifications
-              // aren't working" is so hard to debug - most of these
-              // reasons (permission denied, missing VAPID key, no HTTPS)
-              // never throw, they just resolve with enabled: false.
               console.warn('Push notifications not enabled:', result.reason)
             }
           })
@@ -54,77 +52,99 @@ export default function ChatPage() {
   useEffect(() => {
     if (!userId) return
     loadMessages()
+
+    // Catches replies that finish generating while this page is open but
+    // weren't added locally - handleSend still appends its own reply
+    // immediately for the common case; this just keeps things in sync
+    // beyond that (e.g. another device sending a message).
+    const channel = supabase
+      .channel('chat-page-messages')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          setMessages((prev) =>
+            prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new]
+          )
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [userId])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    // Sitting on this page with messages loaded counts as "read" - this is
+    // what the chat list checks to decide whether to show the unread dot.
+    localStorage.setItem(LAST_READ_KEY, new Date().toISOString())
   }, [messages, sending])
 
   async function handleSend(e) {
-  e.preventDefault()
-  if (!input.trim() || sending) return
+    e.preventDefault()
+    if (!input.trim() || sending) return
 
-  setSending(true)
-  const userText = input.trim()
-  setInput('')
+    setSending(true)
+    const userText = input.trim()
+    setInput('')
 
-  const { data: userMsg, error: userMsgError } = await supabase
-    .from('messages')
-    .insert({ user_id: userId, sender: 'user', content: userText })
-    .select()
-    .single()
+    const { data: userMsg, error: userMsgError } = await supabase
+      .from('messages')
+      .insert({ user_id: userId, sender: 'user', content: userText })
+      .select()
+      .single()
 
-  if (userMsgError) {
-    console.error(userMsgError)
-    setSending(false)
-    return
-  }
-
-  setMessages((prev) => [...prev, userMsg])
-
-  const history = [...messages, userMsg]
-    .slice(-10)
-    .map((m) => ({
-      role: m.sender === 'user' ? 'user' : 'assistant',
-      content: m.content,
-    }))
-
-  const { data: sessionData } = await supabase.auth.getSession()
-  const accessToken = sessionData.session.access_token
-
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const localTime = new Date()
-    .toLocaleString('sv-SE', { timeZone: timezone })
-    .replace(' ', 'T')
-
-  const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-reminder`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ history, timezone, localTime }),
+    if (userMsgError) {
+      console.error(userMsgError)
+      setSending(false)
+      return
     }
-  )
-  const parsed = await res.json()
 
-  // The edge function now saves the companion's reply (and any reminder)
-  // itself, so it lands even if this tab closes before the response
-  // arrives. It hands the saved row back so we show it immediately
-  // without inserting it a second time here.
-  const companionMsg = parsed.message ?? {
-    id: crypto.randomUUID(),
-    user_id: userId,
-    sender: 'companion',
-    content: parsed.reply || "Hmm, something went wrong on my end — mind trying that again?",
-    created_at: new Date().toISOString(),
+    setMessages((prev) => (prev.some((m) => m.id === userMsg.id) ? prev : [...prev, userMsg]))
+
+    const history = [...messages, userMsg]
+      .slice(-10)
+      .map((m) => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.content,
+      }))
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session.access_token
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const localTime = new Date()
+      .toLocaleString('sv-SE', { timeZone: timezone })
+      .replace(' ', 'T')
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-reminder`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ history, timezone, localTime }),
+      }
+    )
+    const parsed = await res.json()
+
+    const companionMsg = parsed.message ?? {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      sender: 'companion',
+      content: parsed.reply || "Hmm, something went wrong on my end — mind trying that again?",
+      created_at: new Date().toISOString(),
+    }
+
+    setMessages((prev) =>
+      prev.some((m) => m.id === companionMsg.id) ? prev : [...prev, companionMsg]
+    )
+    setSending(false)
   }
-
-  setMessages((prev) => [...prev, companionMsg])
-  setSending(false)
-}
 
   async function handleLogout() {
     await supabase.auth.signOut()
