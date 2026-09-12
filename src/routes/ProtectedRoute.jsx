@@ -18,7 +18,7 @@ export default function ProtectedRoute({ children }) {
   }, [])
 
   if (session === undefined) {
-    return <p>Loading...</p> // still checking auth state
+    return <div className="h-dvh bg-slate-950" aria-hidden="true" />
   }
 
   if (!session) {

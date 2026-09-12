@@ -1,3 +1,5 @@
+import CampusCompanionIcon from './CampusCompanionIcon'
+
 export default function Avatar({ label = 'C', size = 'md', className = '' }) {
   const sizes = {
     sm: 'h-9 w-9 text-sm',
@@ -9,7 +11,7 @@ export default function Avatar({ label = 'C', size = 'md', className = '' }) {
     <div
       className={`flex shrink-0 items-center justify-center rounded-full bg-white/15 font-semibold text-white ${sizes[size]} ${className}`}
     >
-      {label}
+      {label === 'campus-companion' ? <CampusCompanionIcon className="h-2/3 w-2/3" /> : label}
     </div>
   )
 }

@@ -158,7 +158,7 @@ export default function ChatPage() {
           <BackArrowIcon className="h-5 w-5 text-white/90" />
         </button>
 
-        <Avatar label="C" size="sm" />
+        <Avatar label="campus-companion" size="sm" />
 
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium leading-tight">Campus Companion</p>
@@ -193,7 +193,7 @@ export default function ChatPage() {
         </div>
       </header>
 
-      <main ref={scrollRef} className="chat-wallpaper flex-1 overflow-y-auto px-3 py-4">
+      <main ref={scrollRef} className="chat-wallpaper min-h-0 flex-1 overflow-y-auto px-3 py-4">
         <div className="space-y-2.5">
           {messages.map((msg) => {
             const isUser = msg.sender === 'user'

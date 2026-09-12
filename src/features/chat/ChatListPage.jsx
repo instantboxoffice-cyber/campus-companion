@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
 import BottomNav from '../../components/BottomNav'
+import CampusCompanionIcon from '../../components/CampusCompanionIcon'
 import {
   ArchiveIcon,
   CameraIcon,
@@ -32,7 +33,6 @@ function isUnread(message) {
 export default function ChatListPage() {
   const navigate = useNavigate()
   const [messages, setMessages] = useState([])
-  const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
@@ -46,7 +46,6 @@ export default function ChatListPage() {
         .order('created_at', { ascending: false })
 
       if (!error) setMessages(data ?? [])
-      setLoading(false)
     }
 
     loadMessages()
@@ -84,7 +83,7 @@ export default function ChatListPage() {
   }
 
   return (
-    <div className="app-screen flex flex-col bg-slate-950 text-white">
+    <div className="app-screen relative flex flex-col bg-slate-950 text-white">
       <header className="bg-slate-900 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Chats</h1>
@@ -151,7 +150,7 @@ export default function ChatListPage() {
         ))}
       </div>
 
-      <main className="flex-1 overflow-y-auto bg-slate-950">
+      <main className="min-h-0 flex-1 overflow-y-auto bg-slate-950">
         {search ? (
           <section>
             <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -166,7 +165,7 @@ export default function ChatListPage() {
                   onClick={() => navigate('/chat')}
                   className="flex w-full gap-3 border-b border-slate-800 px-4 py-3 text-left hover:bg-slate-900"
                 >
-                  <Avatar label="C" size="sm" className="bg-sky-500 text-white" />
+                  <Avatar label="campus-companion" size="sm" className="bg-sky-500 text-white" />
                   <span className="min-w-0 flex-1">
                     <span className="flex justify-between gap-3">
                       <span className="font-medium text-slate-100">Campus Companion</span>
@@ -182,8 +181,6 @@ export default function ChatListPage() {
           <p className="px-6 py-12 text-center text-sm text-slate-500">
             {activeFilter} chats will be available when you have more conversations.
           </p>
-        ) : loading ? (
-          <p className="p-4 text-sm text-slate-500">Loading...</p>
         ) : (
           <>
             <button className="flex w-full items-center gap-4 border-b border-slate-800 px-4 py-3.5 text-left text-slate-300 hover:bg-slate-900">
@@ -196,7 +193,7 @@ export default function ChatListPage() {
                 onClick={() => navigate('/chat')}
                 className="flex w-full items-center gap-3 border-b border-slate-800 px-4 py-3 text-left transition hover:bg-slate-900"
               >
-                <Avatar label="C" size="md" className="bg-sky-500 text-white" />
+                <Avatar label="campus-companion" size="md" className="bg-sky-500 text-white" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-3">
                     <span className="font-medium text-slate-100">Campus Companion</span>
@@ -219,6 +216,23 @@ export default function ChatListPage() {
           </>
         )}
       </main>
+      <div className="pointer-events-none absolute inset-x-0 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-10 mx-auto flex max-w-lg flex-col items-end gap-3 px-4">
+        <button
+          type="button"
+          aria-label="Add contact"
+          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full border border-sky-400/50 bg-slate-800 text-sky-300 shadow-lg shadow-slate-950/40 transition hover:bg-slate-700"
+        >
+          <span className="text-2xl font-light leading-none">+</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/chat')}
+          aria-label="Open Campus Companion"
+          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-500 text-white shadow-xl shadow-sky-950/50 transition hover:bg-sky-400"
+        >
+          <CampusCompanionIcon className="h-8 w-8" />
+        </button>
+      </div>
       <BottomNav hasUnread={unread} />
     </div>
   )

@@ -6,7 +6,6 @@ import { BackArrowIcon, BellIcon, CheckIcon, TrashIcon } from '../../components/
 export default function RemindersPage() {
   const navigate = useNavigate()
   const [reminders, setReminders] = useState([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadReminders() {
@@ -14,7 +13,6 @@ export default function RemindersPage() {
       const userId = userData?.user?.id
 
       if (!userId) {
-        setLoading(false)
         return
       }
 
@@ -25,7 +23,6 @@ export default function RemindersPage() {
         .order('due_at', { ascending: true })
 
       if (!error) setReminders(data ?? [])
-      setLoading(false)
     }
 
     loadReminders()
@@ -61,10 +58,8 @@ export default function RemindersPage() {
         <h1 className="text-lg font-semibold">Reminders</h1>
       </header>
 
-      <main className="flex-1 overflow-y-auto">
-        {loading ? (
-          <p className="p-4 text-sm text-slate-500">Loading reminders...</p>
-        ) : reminders.length === 0 ? (
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        {reminders.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-6 pt-20 text-center text-slate-500">
             <BellIcon className="h-8 w-8 text-slate-300" />
             <p className="text-sm">

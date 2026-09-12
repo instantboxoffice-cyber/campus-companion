@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
 import { PencilIcon } from '../../components/Icons'
+import LoadingSpinner from '../../components/LoadingSpinner'
 
 // Supabase's email OTP length is a project-level setting (Dashboard ->
 // Authentication -> Emails), not something the client can read at runtime.
@@ -141,7 +142,7 @@ export default function AuthPage() {
           onSubmit={handleSendCode}
           className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] pt-[calc(env(safe-area-inset-top)+4rem)]"
         >
-          <Avatar label="C" size="lg" className="mx-auto" />
+          <Avatar label="campus-companion" size="lg" className="mx-auto" />
 
           <h1 className="mt-8 text-center text-2xl font-semibold">Campus Companion</h1>
           <p className="mx-auto mt-2 max-w-xs text-center text-sm text-sky-200/80">
@@ -216,7 +217,11 @@ export default function AuthPage() {
 
           {error && <p className="mx-auto mt-5 max-w-xs text-center text-sm text-red-300">{error}</p>}
 
-          {loading && <p className="mt-5 text-center text-sm text-sky-200/70">Verifying...</p>}
+          {loading && (
+            <div className="mt-5 flex justify-center text-sky-200/70">
+              <LoadingSpinner label="Verifying code" />
+            </div>
+          )}
 
           <button
             type="button"
