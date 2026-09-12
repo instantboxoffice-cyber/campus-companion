@@ -20,14 +20,21 @@ export async function registerPushNotifications(supabase, userId) {
   }
 
   if (Notification.permission === 'default') {
-    const permission = await Notification.requestPermission()
-    if (permission !== 'granted') {
-      return { enabled: false, reason: 'Notification permission was not granted.' }
+    return {
+      enabled: false,
+      reason: 'Notifications are not enabled yet. Choose Enable Notifications in the chat menu.',
+    }
+  }
+
+  if (Notification.permission === 'denied') {
+    return {
+      enabled: false,
+      reason: 'Notification permission was denied. Notifications are blocked by the browser.',
     }
   }
 
   if (Notification.permission !== 'granted') {
-    return { enabled: false, reason: 'Notifications are blocked.' }
+    return { enabled: false, reason: 'Notification permission is not granted.' }
   }
 
   const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY

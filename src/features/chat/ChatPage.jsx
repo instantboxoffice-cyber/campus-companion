@@ -30,7 +30,7 @@ export default function ChatPage() {
         registerPushNotifications(supabase, nextUserId)
           .then((result) => {
             if (!result.enabled) {
-              console.warn('Push notifications not enabled:', result.reason)
+              console.info('Push notifications were not enabled:', result.reason)
             }
           })
           .catch((error) => {
@@ -39,6 +39,39 @@ export default function ChatPage() {
       }
     })
   }, [])
+
+  async function handleEnableNotifications() {
+    setMenuOpen(false)
+
+    if (!('Notification' in window)) {
+      console.warn('This browser does not support notifications.')
+      return
+    }
+
+    if (Notification.permission === 'denied') {
+      console.warn('Notification permission was denied. Enable notifications in the browser settings.')
+      return
+    }
+
+    if (Notification.permission === 'granted') {
+      const result = await registerPushNotifications(supabase, userId)
+      if (!result.enabled) {
+        console.info('Push notifications were not enabled:', result.reason)
+      }
+      return
+    }
+
+    const permission = await Notification.requestPermission()
+    if (permission === 'granted') {
+      const result = await registerPushNotifications(supabase, userId)
+      if (!result.enabled) {
+        console.info('Push notifications were not enabled:', result.reason)
+      }
+      return
+    }
+
+    console.info('Notification permission was not granted.')
+  }
 
   async function loadMessages() {
     const { data, error } = await supabase
@@ -180,6 +213,12 @@ export default function ChatPage() {
                   className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
                 >
                   Reminders
+                </button>
+                <button
+                  onClick={handleEnableNotifications}
+                  className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
+                >
+                  Enable notifications
                 </button>
                 <button
                   onClick={handleLogout}
