@@ -2,14 +2,18 @@
 create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
 
+-- Keep this idempotent when applying the setup more than once.
+select cron.unschedule(jobid)
+from cron.job
+where jobname = 'check_due_reminders_every_minute';
+
 -- Run the reminder checker every minute.
--- Replace PROJECT_REF below with your actual Supabase project reference.
 select cron.schedule(
   'check_due_reminders_every_minute',
   '* * * * *',
   $$
   select net.http_post(
-    url := 'https://PROJECT_REF.supabase.co/functions/v1/check-due-reminders',
+    url := 'https://rkvkmgipeholfltfwize.supabase.co/functions/v1/check-due-reminders',
     headers := '{"Content-Type":"application/json"}'::jsonb,
     body := '{}'::jsonb
   );

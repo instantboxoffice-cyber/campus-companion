@@ -65,6 +65,14 @@ GROQ_API_KEY=...        (Phase 2)
 VAPID_PRIVATE_KEY=...   (Phase 4)
 ```
 
+For browser push reminders, also set `VAPID_PUBLIC_KEY` as an Edge Function secret
+and `VITE_VAPID_PUBLIC_KEY` in the Vercel production environment. The public key
+must be the same key pair as the private key. Deploy the three reminder functions
+and apply `supabase/cron/check_due_reminders.sql` in the Supabase SQL editor.
+The cron job checks every minute, writes the due reminder into the chat, and sends
+a native browser push notification. Users must grant browser notification
+permission while signed in; the chat list registers their device automatically.
+
 ## 6. Auth strategy — the free equivalent of WhatsApp login
 
 WhatsApp logs users in with a phone number and an SMS one-time code. Real SMS delivery (Twilio, Vonage, etc.) is **not free at any real scale** — free SMS tiers are trial credit, not permanent.

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "@supabase/supabase-js"
+import { sendPushToUser } from "../_shared/sendPush.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,22 +17,6 @@ type ReminderRow = {
   created_at: string
 }
 
-async function sendReminderPush(supabaseUrl: string, supabaseKey: string, reminder: ReminderRow) {
-  const pushUrl = new URL('/functions/v1/send-reminder-push', supabaseUrl).toString()
-
-  const res = await fetch(pushUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${supabaseKey}`,
-      apikey: supabaseKey,
-    },
-    body: JSON.stringify({ reminder }),
-  })
-
-  return await res.json()
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders })
@@ -42,19 +27,14 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
 
     if (!supabaseUrl || !supabaseKey) {
-      return new Response(
-        JSON.stringify({ error: "Supabase service credentials missing" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      )
+      return new Response(JSON.stringify({ error: "Supabase service credentials missing" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
     }
 
     const serviceClient = createClient(supabaseUrl, supabaseKey)
-
     const now = new Date().toISOString()
-
     const { data: dueReminders, error: fetchError } = await serviceClient
       .from("reminders")
       .select("*")
@@ -79,10 +59,17 @@ Deno.serve(async (req) => {
 
       if (createMessageError) {
         console.error("Failed to create reminder message", createMessageError)
+        continue
       }
 
       try {
-        await sendReminderPush(supabaseUrl, supabaseKey, reminder)
+        await sendPushToUser(serviceClient, reminder.user_id, {
+          title: "Campus Companion",
+          body: `Reminder: ${reminder.task}`,
+          url: "/",
+          tag: `reminder-${reminder.id}`,
+          type: "reminder",
+        })
       } catch (pushError) {
         console.error("Failed to send reminder push notification", pushError)
       }
@@ -100,14 +87,11 @@ Deno.serve(async (req) => {
       }
 
       const nextDueAt = new Date(reminder.due_at)
-
-      if (reminder.recurrence === "daily") {
-        nextDueAt.setDate(nextDueAt.getDate() + 1)
-      } else if (reminder.recurrence === "weekly") {
-        nextDueAt.setDate(nextDueAt.getDate() + 7)
-      } else if (reminder.recurrence === "monthly") {
-        nextDueAt.setMonth(nextDueAt.getMonth() + 1)
-      }
+      do {
+        if (reminder.recurrence === "daily") nextDueAt.setDate(nextDueAt.getDate() + 1)
+        if (reminder.recurrence === "weekly") nextDueAt.setDate(nextDueAt.getDate() + 7)
+        if (reminder.recurrence === "monthly") nextDueAt.setMonth(nextDueAt.getMonth() + 1)
+      } while (nextDueAt <= new Date(now))
 
       const { error: rescheduleError } = await serviceClient
         .from("reminders")
@@ -119,17 +103,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({ processed: reminders.length, checkedAt: now }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    )
+    return new Response(JSON.stringify({ processed: reminders.length, checkedAt: now }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 })

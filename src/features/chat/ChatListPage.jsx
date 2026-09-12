@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
+import { registerPushNotifications } from '../../lib/pushNotifications'
 import Avatar from '../../components/Avatar'
 import BottomNav from '../../components/BottomNav'
 import CampusCompanionIcon from '../../components/CampusCompanionIcon'
@@ -37,6 +38,15 @@ export default function ChatListPage() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
   const searchInputRef = useRef(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      registerPushNotifications(supabase, user.id).catch((error) => {
+        console.warn('Push registration unavailable:', error)
+      })
+    })
+  }, [])
 
   useEffect(() => {
     async function loadMessages() {
