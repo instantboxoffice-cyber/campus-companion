@@ -40,18 +40,17 @@ export default function ChatPage() {
     })
   }, [])
 
-  async function loadMessages() {
-    const { data, error } = await supabase
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+
+    supabase
       .from('messages')
       .select('*')
       .order('created_at', { ascending: true })
-
-    if (!error) setMessages(data)
-  }
-
-  useEffect(() => {
-    if (!userId) return
-    loadMessages()
+      .then(({ data, error }) => {
+        if (!cancelled && !error) setMessages(data ?? [])
+      })
 
     // Catches replies that finish generating while this page is open but
     // weren't added locally - handleSend still appends its own reply
@@ -71,6 +70,7 @@ export default function ChatPage() {
       .subscribe()
 
     return () => {
+      cancelled = true
       supabase.removeChannel(channel)
     }
   }, [userId])
@@ -132,12 +132,52 @@ export default function ChatPage() {
     )
     const parsed = await res.json()
 
-    const companionMsg = parsed.message ?? {
-      id: crypto.randomUUID(),
-      user_id: userId,
-      sender: 'companion',
-      content: parsed.reply || "Hmm, something went wrong on my end — mind trying that again?",
-      created_at: new Date().toISOString(),
+    const replyContent = parsed.reply || "Hmm, something went wrong on my end — mind trying that again?"
+    let companionMsg = parsed.message
+
+    // The function normally saves and returns the companion row. Persist a
+    // client-side fallback as well so a response never exists only in memory
+    // when an older or temporarily unavailable function deployment returns
+    // the reply without its saved message.
+    if (!companionMsg) {
+      const { data: existingMessages, error: lookupError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('sender', 'companion')
+        .eq('content', replyContent)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (lookupError) {
+        console.error('Failed to check for saved companion response:', lookupError)
+      }
+
+      const existingMessage = existingMessages?.[0]
+      if (existingMessage) {
+        companionMsg = existingMessage
+      }
+    }
+
+    if (!companionMsg) {
+      const { data: savedMessage, error: saveError } = await supabase
+        .from('messages')
+        .insert({ user_id: userId, sender: 'companion', content: replyContent })
+        .select()
+        .single()
+
+      if (saveError) {
+        console.error('Failed to save companion response:', saveError)
+        companionMsg = {
+          id: crypto.randomUUID(),
+          user_id: userId,
+          sender: 'companion',
+          content: replyContent,
+          created_at: new Date().toISOString(),
+        }
+      } else {
+        companionMsg = savedMessage
+      }
     }
 
     setMessages((prev) =>

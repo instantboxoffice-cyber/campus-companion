@@ -88,7 +88,10 @@ Rules:
       .select()
       .single()
 
-    if (messageError) console.error("Failed to save companion message", messageError)
+    if (messageError) {
+      console.error("Failed to save companion message", messageError)
+      throw new Error(`Failed to save companion message: ${messageError.message}`)
+    }
     companionMessage = data
 
     try {

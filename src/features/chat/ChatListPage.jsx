@@ -216,11 +216,11 @@ export default function ChatListPage() {
           </>
         )}
       </main>
-      <div className="pointer-events-none absolute inset-x-0 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-10 mx-auto flex max-w-lg flex-col items-end gap-3 px-4">
+      <div className="pointer-events-none absolute inset-x-0 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-10 mx-auto flex max-w-lg flex-col items-end gap-2 px-4">
         <button
           type="button"
           aria-label="Add contact"
-          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full border border-sky-400/50 bg-slate-800 text-sky-300 shadow-lg shadow-slate-950/40 transition hover:bg-slate-700"
+          className="pointer-events-auto mr-1 flex h-11 w-11 items-center justify-center self-end rounded-full border border-sky-400/50 bg-slate-800 text-sky-300 shadow-lg shadow-slate-950/40 transition hover:bg-slate-700"
         >
           <span className="text-2xl font-light leading-none">+</span>
         </button>
@@ -228,7 +228,7 @@ export default function ChatListPage() {
           type="button"
           onClick={() => navigate('/chat')}
           aria-label="Open Campus Companion"
-          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-500 text-white shadow-xl shadow-sky-950/50 transition hover:bg-sky-400"
+          className="pointer-events-auto flex h-14 w-14 items-center justify-center self-end rounded-full bg-sky-500 text-white shadow-xl shadow-sky-950/50 transition hover:bg-sky-400"
         >
           <CampusCompanionIcon className="h-8 w-8" />
         </button>
