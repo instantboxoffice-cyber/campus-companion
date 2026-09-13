@@ -37,6 +37,7 @@ export default function ChatPage() {
   const [showSoftAsk, setShowSoftAsk] = useState(false)
   const [showDeniedNotice, setShowDeniedNotice] = useState(false)
   const scrollRef = useRef(null)
+  const hasOpenedChatRef = useRef(true)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -57,10 +58,6 @@ export default function ChatPage() {
     })
   }, [])
 
-  // Show a one-time, dismissible notice if the user has already blocked
-  // notifications at the browser level - we can't re-trigger the native
-  // prompt, so this just points them to manual recovery instead of a
-  // button that would silently do nothing.
   useEffect(() => {
     if (!canRequestNotificationPermission()) return
     if (Notification.permission !== 'denied') return
@@ -141,7 +138,18 @@ export default function ChatPage() {
   }, [userId])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    if (!scrollRef.current) return
+
+    // Opening the chat should jump straight to the bottom instantly, like
+    // WhatsApp. Only messages that arrive AFTER that first load should
+    // animate smoothly into view.
+    const behavior = hasOpenedChatRef.current ? 'auto' : 'smooth'
+    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior })
+
+    if (messages.length > 0) {
+      hasOpenedChatRef.current = false
+    }
+
     localStorage.setItem(LAST_READ_KEY, new Date().toISOString())
   }, [messages, sending])
 
@@ -208,11 +216,6 @@ export default function ChatPage() {
     )
     setSending(false)
 
-    // Contextual soft-ask: right after a reminder actually gets created is
-    // the one moment the value of notifications is obvious. Only show it
-    // if permission is still undecided, and stop asking after a few
-    // dismissals so we're not nagging (mirrors how Chrome itself throttles
-    // sites that over-prompt).
     if (
       parsed.intent === 'reminder' &&
       canRequestNotificationPermission() &&
