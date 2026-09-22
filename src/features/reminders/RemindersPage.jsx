@@ -68,7 +68,7 @@ export default function RemindersPage() {
           <div className="flex flex-col items-center gap-3 px-6 pt-20 text-center text-slate-500">
             <BellIcon className="h-8 w-8 text-slate-300" />
             <p className="text-sm">
-              No reminders yet. Ask Campus Companion in chat to set one.
+              No reminders yet. Ask Companion in chat to set one.
             </p>
           </div>
         ) : (

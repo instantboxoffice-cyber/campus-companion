@@ -3,13 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
 import { PencilIcon } from '../../components/Icons'
+import companionAvatar from '../../assets/companion-avatar.png'
 
 // Supabase's email OTP length is a project-level setting (Dashboard ->
-// Authentication -> Emails), not something the client can read at runtime.
-// It can be anywhere from 6-10 digits depending on how/when the project was
-// provisioned. Set this to whatever your project is actually sending -
-// check the code in the confirmation email if you're not sure - and the
-// input below will always match it. Nothing else in this file assumes 6.
+// Authentication -> Emails: "Email OTP Length"), not something the client
+// can read at runtime. This project was originally set to send 8-digit
+// codes while this constant said 6, which is why the code from the email
+// never fit in the boxes. 6 is also Supabase's documented minimum for this
+// setting (4 was rejected), so the Dashboard is confirmed set to 6 and
+// this constant matches it. Nothing else in this file assumes any fixed
+// length - if the Dashboard value ever changes, only this line needs to
+// change with it.
 const OTP_LENGTH = 6
 
 const RESEND_COOLDOWN_SECONDS = 30
@@ -141,7 +145,7 @@ export default function AuthPage() {
           onSubmit={handleSendCode}
           className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] pt-[calc(env(safe-area-inset-top)+4rem)]"
         >
-          <Avatar label="C" size="lg" className="mx-auto" />
+          <Avatar src={companionAvatar} alt="Companion" size="lg" className="mx-auto" />
 
           <h1 className="mt-8 text-center text-2xl font-semibold">Campus Companion</h1>
           <p className="mx-auto mt-2 max-w-xs text-center text-sm text-sky-200/80">

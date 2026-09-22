@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
 import { MoreVerticalIcon, SearchIcon } from '../../components/Icons'
+import companionAvatar from '../../assets/companion-avatar.png'
 
 const LAST_READ_KEY = 'companion_last_read_at'
 
@@ -79,7 +80,7 @@ export default function ChatListPage() {
     <div className="app-screen flex flex-col bg-white">
       <header className="bg-primary-dark px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] text-white">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Chats</h1>
+          <h1 className="text-2xl font-semibold">Campus Companion</h1>
           <div className="flex items-center gap-4">
             <SearchIcon className="h-5 w-5 text-white/85" />
             <div className="relative">
@@ -118,10 +119,10 @@ export default function ChatListPage() {
             onClick={() => navigate('/chat')}
             className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
           >
-            <Avatar label="C" size="md" className="bg-primary text-white" />
+            <Avatar src={companionAvatar} alt="Companion" size="md" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
-                <p className="font-medium text-slate-900">Campus Companion</p>
+                <p className="font-medium text-slate-900">Companion</p>
                 <span className={`shrink-0 text-xs ${unread ? 'font-semibold text-primary' : 'text-slate-400'}`}>
                   {formatTimestamp(lastMessage?.created_at)}
                 </span>

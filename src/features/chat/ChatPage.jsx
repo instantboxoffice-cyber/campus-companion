@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { registerPushNotifications } from '../../lib/pushNotifications'
 import Avatar from '../../components/Avatar'
 import { BackArrowIcon, CheckIcon, MoreVerticalIcon, SendIcon } from '../../components/Icons'
+import companionAvatar from '../../assets/companion-avatar.png'
 
 const LAST_READ_KEY = 'companion_last_read_at'
 const SOFT_ASK_DISMISS_KEY = 'notif_soft_ask_dismiss_count'
@@ -182,29 +183,36 @@ export default function ChatPage() {
         content: m.content,
       }))
 
-    const { data: sessionData } = await supabase.auth.getSession()
-    const accessToken = sessionData.session.access_token
-
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
     const localTime = new Date()
       .toLocaleString('sv-SE', { timeZone: timezone })
       .replace(' ', 'T')
 
-    const res = await fetch('/functions/v1/parse-reminder', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ history, timezone, localTime }),
-    })
-    const parsed = await res.json()
+    // IMPORTANT: this must go through supabase.functions.invoke(), not a
+    // plain fetch('/functions/v1/parse-reminder', ...). A relative URL like
+    // that resolves against THIS SITE's own origin, not Supabase - and
+    // vercel.json's catch-all rewrite ("/(.*)" -> "/index.html") then sends
+    // that POST request to the static index.html file instead. Vercel only
+    // serves static files on GET/HEAD, so the POST comes back as an empty
+    // 405 response, which is why res.json() used to blow up with
+    // "Unexpected end of JSON input" and the companion looked like it had
+    // stopped replying. functions.invoke() builds the correct absolute
+    // Supabase URL itself and attaches the current session's auth token,
+    // so this never hits our own site at all.
+    const { data: parsed, error: invokeError } = await supabase.functions.invoke(
+      'parse-reminder',
+      { body: { history, timezone, localTime } }
+    )
 
-    const companionMsg = parsed.message ?? {
+    if (invokeError) {
+      console.error('parse-reminder failed', invokeError)
+    }
+
+    const companionMsg = parsed?.message ?? {
       id: crypto.randomUUID(),
       user_id: userId,
       sender: 'companion',
-      content: parsed.reply || "Hmm, something went wrong on my end — mind trying that again?",
+      content: parsed?.reply || "Hmm, something went wrong on my end — mind trying that again?",
       created_at: new Date().toISOString(),
     }
 
@@ -214,7 +222,7 @@ export default function ChatPage() {
     setSending(false)
 
     if (
-      parsed.intent === 'reminder' &&
+      parsed?.intent === 'reminder' &&
       canRequestNotificationPermission() &&
       Notification.permission === 'default'
     ) {
@@ -253,10 +261,10 @@ export default function ChatPage() {
           <BackArrowIcon className="h-5 w-5 text-white/90" />
         </button>
 
-        <Avatar label="C" size="sm" />
+        <Avatar src={companionAvatar} alt="Companion" size="sm" />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium leading-tight">Campus Companion</p>
+          <p className="truncate font-medium leading-tight">Companion</p>
           <p className="text-xs leading-tight text-sky-200/80">
             {sending ? 'typing…' : 'online'}
           </p>

@@ -11,7 +11,7 @@ self.addEventListener('push', (event) => {
 })
 
 async function handlePush(event) {
-  let payload = { title: 'Campus Companion', body: 'You have a reminder.', data: { url: '/' } }
+  let payload = { title: 'Companion', body: 'You have a reminder.', data: { url: '/' } }
   try {
     if (event.data) payload = await event.data.json()
   } catch (err) {
@@ -28,7 +28,7 @@ async function handlePush(event) {
     if (appIsFocused) return
   }
 
-  const title = payload.title || 'Campus Companion'
+  const title = payload.title || 'Companion'
   const options = {
     body: payload.body || 'You have a reminder.',
     icon: '/icon-192.png',

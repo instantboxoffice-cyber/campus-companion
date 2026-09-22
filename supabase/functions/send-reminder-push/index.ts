@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, supabaseKey)
 
     const result = await sendPushToUser(serviceClient, reminder.user_id, {
-      title: "Campus Companion",
+      title: "Companion",
       body: `Reminder: ${reminder.task}`,
       url: "/",
       type: "reminder",

@@ -136,7 +136,7 @@ Rules:
 
     try {
       await sendPushToUser(serviceClient, user.id, {
-        title: "Campus Companion",
+        title: "Companion",
         body: parsed.reply,
         url: "/chat",
         tag: "companion-chat",

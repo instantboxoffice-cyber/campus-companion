@@ -1,8 +1,18 @@
-export default function Avatar({ label = 'C', size = 'md', className = '' }) {
+export default function Avatar({ label = 'C', size = 'md', className = '', src, alt = '' }) {
   const sizes = {
     sm: 'h-9 w-9 text-sm',
     md: 'h-12 w-12 text-base',
     lg: 'h-20 w-20 text-2xl',
+  }
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        className={`shrink-0 rounded-full object-cover ${sizes[size]} ${className}`}
+      />
+    )
   }
 
   return (
