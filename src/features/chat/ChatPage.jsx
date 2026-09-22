@@ -190,17 +190,14 @@ export default function ChatPage() {
       .toLocaleString('sv-SE', { timeZone: timezone })
       .replace(' ', 'T')
 
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-reminder`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ history, timezone, localTime }),
-      }
-    )
+    const res = await fetch('/functions/v1/parse-reminder', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ history, timezone, localTime }),
+    })
     const parsed = await res.json()
 
     const companionMsg = parsed.message ?? {

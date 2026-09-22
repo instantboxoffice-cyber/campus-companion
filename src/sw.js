@@ -13,7 +13,7 @@ self.addEventListener('push', (event) => {
 async function handlePush(event) {
   let payload = { title: 'Campus Companion', body: 'You have a reminder.', data: { url: '/' } }
   try {
-    if (event.data) payload = event.data.json()
+    if (event.data) payload = await event.data.json()
   } catch (err) {
     console.error('Push payload was not valid JSON:', err)
   }

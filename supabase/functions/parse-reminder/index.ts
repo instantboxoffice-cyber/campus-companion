@@ -1,7 +1,31 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { DateTime } from "luxon"
 import { createClient } from "@supabase/supabase-js"
 import { sendPushToUser } from "../_shared/sendPush.ts"
+
+function normalizeModelJson(rawText) {
+  if (!rawText || typeof rawText !== "string") {
+    return ""
+  }
+
+  let text = rawText.trim()
+
+  if (text.startsWith("```")) {
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/s, "")
+  }
+
+  text = text.replace(/^json\s+/i, "")
+  text = text.replace(/^\s*```json\s*/i, "")
+  text = text.replace(/```\s*$/s, "")
+
+  const first = text.indexOf("{")
+  const last = text.lastIndexOf("}")
+  if (first >= 0 && last > first) {
+    text = text.slice(first, last + 1)
+  }
+
+  return text
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,13 +72,32 @@ Rules:
     }),
   })
 
+  if (!groqRes.ok) {
+    const errorText = await groqRes.text()
+    return { error: "groq_failed", groqStatus: groqRes.status, groqResponse: errorText }
+  }
+
   const groqData = await groqRes.json()
 
-  if (!groqData.choices) {
+  if (!groqData.choices || !Array.isArray(groqData.choices) || !groqData.choices[0]?.message?.content) {
     return { error: "groq_failed", groqStatus: groqRes.status, groqData }
   }
 
-  const parsed = JSON.parse(groqData.choices[0].message.content)
+  const rawContent = groqData.choices[0].message.content
+  const normalizedContent = normalizeModelJson(rawContent)
+
+  let parsed
+  try {
+    parsed = JSON.parse(normalizedContent)
+  } catch (parseErr) {
+    return {
+      error: "groq_json_parse_failed",
+      groqStatus: groqRes.status,
+      receivedContent: rawContent,
+      normalizedContent,
+      message: parseErr instanceof Error ? parseErr.message : String(parseErr),
+    }
+  }
 
   if (parsed.intent === "reminder" && parsed.due_at) {
     const localDt = DateTime.fromISO(parsed.due_at, { zone: userTimezone })
