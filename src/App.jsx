@@ -3,6 +3,8 @@ import AuthPage from './features/auth/AuthPage'
 import ChatListPage from './features/chat/ChatListPage'
 import ChatPage from './features/chat/ChatPage'
 import RemindersPage from './features/reminders/RemindersPage'
+import UpdatesPage from './features/updates/UpdatesPage'
+import CallsPage from './features/calls/CallsPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import InstallPrompt from './components/InstallPrompt'
 
@@ -32,6 +34,22 @@ function App() {
           element={
             <ProtectedRoute>
               <RemindersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/updates"
+          element={
+            <ProtectedRoute>
+              <UpdatesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calls"
+          element={
+            <ProtectedRoute>
+              <CallsPage />
             </ProtectedRoute>
           }
         />

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
-import { MoreVerticalIcon, SearchIcon } from '../../components/Icons'
+import BottomNav from '../../components/BottomNav'
+import { useComingSoonToast } from '../../components/ComingSoonToast'
+import { CameraIcon, MoreVerticalIcon, SearchIcon } from '../../components/Icons'
 import companionAvatar from '../../assets/companion-avatar.png'
 
 const LAST_READ_KEY = 'companion_last_read_at'
@@ -32,6 +34,8 @@ export default function ChatListPage() {
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [unread, setUnread] = useState(false)
+  const [filter, setFilter] = useState('all') // 'all' | 'unread'
+  const [toast, showToast] = useComingSoonToast()
 
   useEffect(() => {
     async function loadLastMessage() {
@@ -76,13 +80,17 @@ export default function ChatListPage() {
     navigate('/auth', { replace: true })
   }
 
+  const showChatRow = filter === 'all' || (filter === 'unread' && unread)
+
   return (
     <div className="app-screen flex flex-col bg-white">
-      <header className="bg-primary-dark px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] text-white">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Campus Companion</h1>
-          <div className="flex items-center gap-4">
-            <SearchIcon className="h-5 w-5 text-white/85" />
+      <header className="bg-primary-dark pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] text-white">
+        <div className="flex items-center justify-between px-4">
+          <h1 className="text-2xl font-bold">Campus Companion</h1>
+          <div className="flex items-center gap-5">
+            <button onClick={() => showToast('Camera coming soon')} aria-label="Camera">
+              <CameraIcon className="h-5 w-5 text-white/85" />
+            </button>
             <div className="relative">
               <button onClick={() => setMenuOpen((v) => !v)} aria-label="More options">
                 <MoreVerticalIcon className="h-5 w-5 text-white/85" />
@@ -92,10 +100,10 @@ export default function ChatListPage() {
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-lg bg-white text-sm text-slate-800 shadow-xl">
                     <button
-                      onClick={() => { setMenuOpen(false); navigate('/reminders') }}
+                      onClick={() => { setMenuOpen(false); showToast('Settings coming soon') }}
                       className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
                     >
-                      Reminders
+                      Settings
                     </button>
                     <button
                       onClick={handleLogout}
@@ -109,12 +117,45 @@ export default function ChatListPage() {
             </div>
           </div>
         </div>
+
+        <button
+          onClick={() => showToast('Search coming soon')}
+          className="mx-4 mt-3 flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-left text-white/60"
+        >
+          <SearchIcon className="h-4 w-4 shrink-0" />
+          <span className="text-sm">Ask Companion or Search</span>
+        </button>
+
+        <div className="mt-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            onClick={() => setFilter('all')}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              filter === 'all' ? 'bg-primary text-white' : 'bg-white/10 text-white/70'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilter('unread')}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              filter === 'unread' ? 'bg-primary text-white' : 'bg-white/10 text-white/70'
+            }`}
+          >
+            Unread
+          </button>
+          <button
+            onClick={() => showToast('Groups coming soon')}
+            className="shrink-0 rounded-full border border-dashed border-white/25 px-4 py-1.5 text-sm font-medium text-white/40"
+          >
+            Groups
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto">
         {loading ? (
           <p className="p-4 text-sm text-slate-500">Loading...</p>
-        ) : (
+        ) : showChatRow ? (
           <button
             onClick={() => navigate('/chat')}
             className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
@@ -137,8 +178,13 @@ export default function ChatListPage() {
               </div>
             </div>
           </button>
+        ) : (
+          <p className="p-6 text-center text-sm text-slate-400">No unread chats.</p>
         )}
       </main>
+
+      {toast}
+      <BottomNav active="chats" />
     </div>
   )
 }

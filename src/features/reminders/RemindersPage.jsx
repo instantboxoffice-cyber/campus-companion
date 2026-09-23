@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
-import { BackArrowIcon, BellIcon, CheckIcon, TrashIcon } from '../../components/Icons'
+import { BellIcon, CheckIcon, TrashIcon } from '../../components/Icons'
+import BottomNav from '../../components/BottomNav'
 
 export default function RemindersPage() {
-  const navigate = useNavigate()
   const [reminders, setReminders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -54,11 +53,8 @@ export default function RemindersPage() {
 
   return (
     <div className="app-screen flex flex-col bg-white">
-      <header className="flex items-center gap-3 bg-primary-dark px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] text-white">
-        <button onClick={() => navigate('/chat')} aria-label="Back to chat">
-          <BackArrowIcon className="h-5 w-5 text-white/90" />
-        </button>
-        <h1 className="text-lg font-semibold">Reminders</h1>
+      <header className="bg-primary-dark px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] text-white">
+        <h1 className="text-2xl font-bold">Reminders</h1>
       </header>
 
       <main className="flex-1 overflow-y-auto">
@@ -112,6 +108,8 @@ export default function RemindersPage() {
           </ul>
         )}
       </main>
+
+      <BottomNav active="reminders" />
     </div>
   )
 }

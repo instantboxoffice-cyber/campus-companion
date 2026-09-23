@@ -110,3 +110,53 @@ export function SquarePlusIcon({ className = 'h-4 w-4' }) {
     </svg>
   )
 }
+
+export function CameraIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M4 8h2.5l1.3-2h8.4l1.3 2H20a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx="12" cy="13.5" r="3.4" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  )
+}
+
+// Bottom-nav "Chats" tab glyph: a simple speech bubble.
+export function ChatBubbleIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path
+        d="M4 12a8 8 0 1114.2 5L20 21l-4.2-1.1A8 8 0 014 12z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+// Bottom-nav "Updates" tab glyph: a broken ring, echoing a status/story
+// indicator without reproducing WhatsApp's own icon pixel-for-pixel.
+export function UpdatesIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="7.5" stroke="currentColor" strokeWidth="1.6" strokeDasharray="4 3.2" />
+      <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+    </svg>
+  )
+}
+
+// Bottom-nav "Calls" tab glyph: a classic handset.
+export function PhoneIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path
+        d="M5.5 4h3l1.5 4-2 1.3a11.5 11.5 0 005.7 5.7l1.3-2 4 1.5v3a1.5 1.5 0 01-1.6 1.5A16 16 0 014 5.6 1.5 1.5 0 015.5 4z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
