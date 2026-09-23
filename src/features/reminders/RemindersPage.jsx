@@ -5,17 +5,12 @@ import BottomNav from '../../components/BottomNav'
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadReminders() {
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData?.user?.id
-
-      if (!userId) {
-        setLoading(false)
-        return
-      }
+      if (!userId) return
 
       const { data, error } = await supabase
         .from('reminders')
@@ -23,8 +18,12 @@ export default function RemindersPage() {
         .eq('user_id', userId)
         .order('due_at', { ascending: true })
 
+      // No loading flag gating the render - the empty state below is
+      // already what's on screen the instant this page opens, exactly
+      // like WhatsApp's chat list never shows a spinner before messages
+      // appear. If there ARE reminders, this quietly swaps them in once
+      // the query resolves; if there aren't, nothing visibly changes.
       if (!error) setReminders(data ?? [])
-      setLoading(false)
     }
 
     loadReminders()
@@ -58,9 +57,7 @@ export default function RemindersPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        {loading ? (
-          <p className="p-4 text-sm text-slate-500">Loading reminders...</p>
-        ) : reminders.length === 0 ? (
+        {reminders.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-6 pt-20 text-center text-slate-500">
             <BellIcon className="h-8 w-8 text-slate-300" />
             <p className="text-sm">

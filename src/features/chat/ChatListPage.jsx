@@ -31,7 +31,6 @@ function isUnread(message) {
 export default function ChatListPage() {
   const navigate = useNavigate()
   const [lastMessage, setLastMessage] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [unread, setUnread] = useState(false)
   const [filter, setFilter] = useState('all') // 'all' | 'unread'
@@ -50,7 +49,9 @@ export default function ChatListPage() {
         setLastMessage(latest)
         setUnread(isUnread(latest))
       }
-      setLoading(false)
+      // No `loading` flag: the row below renders on the very first paint,
+      // using its own fallback text until this resolves, then this just
+      // quietly updates it in place - no spinner, no flash, no "Loading...".
     }
 
     loadLastMessage()
@@ -153,9 +154,7 @@ export default function ChatListPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        {loading ? (
-          <p className="p-4 text-sm text-slate-500">Loading...</p>
-        ) : showChatRow ? (
+        {showChatRow ? (
           <button
             onClick={() => navigate('/chat')}
             className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
