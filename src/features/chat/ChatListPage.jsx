@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
 import BottomNav from '../../components/BottomNav'
 import { useComingSoonToast } from '../../components/ComingSoonToast'
-import { CameraIcon, MoreVerticalIcon, SearchIcon } from '../../components/Icons'
+import { CameraIcon, ChatBubbleIcon, MoreVerticalIcon, SearchIcon, XIcon } from '../../components/Icons'
 import companionAvatar from '../../assets/companion-avatar.png'
 
 const LAST_READ_KEY = 'companion_last_read_at'
@@ -34,6 +34,7 @@ export default function ChatListPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [unread, setUnread] = useState(false)
   const [filter, setFilter] = useState('all') // 'all' | 'unread'
+  const [searchQuery, setSearchQuery] = useState('')
   const [toast, showToast] = useComingSoonToast()
 
   useEffect(() => {
@@ -81,7 +82,52 @@ export default function ChatListPage() {
     navigate('/auth', { replace: true })
   }
 
-  const showChatRow = filter === 'all' || (filter === 'unread' && unread)
+  function openChat() {
+    navigate('/chat')
+  }
+
+  function askCompanion(query) {
+    // Sends the search text straight into the Companion DM as a real
+    // message - the same effect as opening the chat and typing it in.
+    navigate('/chat', { state: { forwardedQuery: query } })
+  }
+
+  const trimmedQuery = searchQuery.trim()
+  const isSearching = trimmedQuery.length > 0
+  const lowerQuery = trimmedQuery.toLowerCase()
+
+  // There's only ever one conversation in this app (Companion), so
+  // "searching chats" means: does its name or its latest message match?
+  const chatMatchesSearch =
+    isSearching &&
+    ('companion'.includes(lowerQuery) || (lastMessage?.content ?? '').toLowerCase().includes(lowerQuery))
+
+  const showChatRow = !isSearching && (filter === 'all' || (filter === 'unread' && unread))
+
+  const chatRow = (
+    <button
+      onClick={openChat}
+      className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
+    >
+      <Avatar src={companionAvatar} alt="Companion" size="md" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between">
+          <p className="font-medium text-slate-900">Companion</p>
+          <span className={`shrink-0 text-xs ${unread ? 'font-semibold text-primary' : 'text-slate-400'}`}>
+            {formatTimestamp(lastMessage?.created_at)}
+          </span>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className={`truncate text-sm ${unread ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
+            {lastMessage
+              ? `${lastMessage.sender === 'user' ? 'You: ' : ''}${lastMessage.content}`
+              : 'Ask me to remind you about something'}
+          </p>
+          {unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />}
+        </div>
+      </div>
+    </button>
+  )
 
   return (
     <div className="app-screen flex flex-col bg-white">
@@ -119,64 +165,77 @@ export default function ChatListPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => showToast('Search coming soon')}
-          className="mx-4 mt-3 flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-left text-white/60"
-        >
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-white/60 focus-within:bg-white/15">
           <SearchIcon className="h-4 w-4 shrink-0" />
-          <span className="text-sm">Ask Companion or Search</span>
-        </button>
-
-        <div className="mt-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <button
-            onClick={() => setFilter('all')}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              filter === 'all' ? 'bg-primary text-white' : 'bg-white/10 text-white/70'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilter('unread')}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              filter === 'unread' ? 'bg-primary text-white' : 'bg-white/10 text-white/70'
-            }`}
-          >
-            Unread
-          </button>
-          <button
-            onClick={() => showToast('Groups coming soon')}
-            className="shrink-0 rounded-full border border-dashed border-white/25 px-4 py-1.5 text-sm font-medium text-white/40"
-          >
-            Groups
-          </button>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Ask Companion or Search"
+            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/60 focus:outline-none"
+          />
+          {isSearching && (
+            <button onClick={() => setSearchQuery('')} aria-label="Clear search" className="shrink-0">
+              <XIcon className="h-4 w-4 text-white/70" />
+            </button>
+          )}
         </div>
+
+        {!isSearching && (
+          <div className="mt-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              onClick={() => setFilter('all')}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                filter === 'all' ? 'bg-primary text-white' : 'bg-white/10 text-white/70'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilter('unread')}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                filter === 'unread' ? 'bg-primary text-white' : 'bg-white/10 text-white/70'
+              }`}
+            >
+              Unread
+            </button>
+            <button
+              onClick={() => showToast('Groups coming soon')}
+              className="shrink-0 rounded-full border border-dashed border-white/25 px-4 py-1.5 text-sm font-medium text-white/40"
+            >
+              Groups
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        {showChatRow ? (
-          <button
-            onClick={() => navigate('/chat')}
-            className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
-          >
-            <Avatar src={companionAvatar} alt="Companion" size="md" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-slate-900">Companion</p>
-                <span className={`shrink-0 text-xs ${unread ? 'font-semibold text-primary' : 'text-slate-400'}`}>
-                  {formatTimestamp(lastMessage?.created_at)}
-                </span>
+        {isSearching ? (
+          <>
+            <button
+              onClick={() => askCompanion(trimmedQuery)}
+              className="flex w-full items-center gap-3 border-b border-slate-100 bg-primary/5 px-4 py-3 text-left transition hover:bg-primary/10"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <ChatBubbleIcon className="h-5 w-5" />
               </div>
-              <div className="mt-0.5 flex items-center justify-between gap-2">
-                <p className={`truncate text-sm ${unread ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
-                  {lastMessage
-                    ? `${lastMessage.sender === 'user' ? 'You: ' : ''}${lastMessage.content}`
-                    : 'Ask me to remind you about something'}
-                </p>
-                {unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-slate-900">Ask Companion</p>
+                <p className="truncate text-sm text-primary">&ldquo;{trimmedQuery}&rdquo;</p>
               </div>
-            </div>
-          </button>
+            </button>
+
+            <p className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Chats
+            </p>
+            {chatMatchesSearch ? (
+              chatRow
+            ) : (
+              <p className="px-4 pb-6 text-sm text-slate-400">No chats found.</p>
+            )}
+          </>
+        ) : showChatRow ? (
+          chatRow
         ) : (
           <p className="p-6 text-center text-sm text-slate-400">No unread chats.</p>
         )}

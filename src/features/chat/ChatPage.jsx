@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { registerPushNotifications } from '../../lib/pushNotifications'
 import Avatar from '../../components/Avatar'
@@ -27,6 +27,7 @@ function canRequestNotificationPermission() {
 
 export default function ChatPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -39,6 +40,7 @@ export default function ChatPage() {
   const [showDeniedNotice, setShowDeniedNotice] = useState(false)
   const scrollRef = useRef(null)
   const hasOpenedChatRef = useRef(true)
+  const forwardedQueryHandledRef = useRef(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -138,6 +140,29 @@ export default function ChatPage() {
     }
   }, [userId])
 
+  // Picks up a question forwarded here from the Chats-tab search bar
+  // (navigate('/chat', { state: { forwardedQuery } })) and sends it as a
+  // real message, the same as if it had been typed and submitted here.
+  // The ref guard matters in dev: React 18 StrictMode runs this effect
+  // twice on mount, and without it that would send the question twice.
+  useEffect(() => {
+    if (!userId) return
+    if (forwardedQueryHandledRef.current) return
+    const forwardedQuery = location.state?.forwardedQuery
+    if (!forwardedQuery) return
+
+    forwardedQueryHandledRef.current = true
+    sendMessage(forwardedQuery)
+    // Clear the navigation state so coming back to /chat later (back
+    // button, refresh) doesn't resend the same forwarded question.
+    navigate(location.pathname, { replace: true, state: null })
+    // Deliberately keyed only on [userId, location.state]: `navigate` is
+    // stable, `location.pathname` doesn't change on this page, and
+    // `sendMessage` is a new function every render - the ref guard above
+    // (not this dependency array) is what prevents this from re-firing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, location.state])
+
   useEffect(() => {
     if (!scrollRef.current) return
 
@@ -154,13 +179,11 @@ export default function ChatPage() {
     localStorage.setItem(LAST_READ_KEY, new Date().toISOString())
   }, [messages, sending])
 
-  async function handleSend(e) {
-    e.preventDefault()
-    if (!input.trim() || sending) return
+  async function sendMessage(rawText) {
+    const userText = rawText.trim()
+    if (!userText || sending) return
 
     setSending(true)
-    const userText = input.trim()
-    setInput('')
 
     const { data: userMsg, error: userMsgError } = await supabase
       .from('messages')
@@ -231,6 +254,14 @@ export default function ChatPage() {
         setShowSoftAsk(true)
       }
     }
+  }
+
+  async function handleSend(e) {
+    e.preventDefault()
+    if (!input.trim() || sending) return
+    const userText = input.trim()
+    setInput('')
+    await sendMessage(userText)
   }
 
   function dismissSoftAsk() {
