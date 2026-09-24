@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
+import { getLastReadAt, isMessageUnread } from '../../lib/chatRead'
 import Avatar from '../../components/Avatar'
 import BottomNav from '../../components/BottomNav'
 import { useComingSoonToast } from '../../components/ComingSoonToast'
 import { CameraIcon, ChatBubbleIcon, MoreVerticalIcon, SearchIcon, XIcon } from '../../components/Icons'
 import companionAvatar from '../../assets/companion-avatar.png'
-
-const LAST_READ_KEY = 'companion_last_read_at'
 
 function formatTimestamp(iso) {
   if (!iso) return ''
@@ -21,21 +20,16 @@ function formatTimestamp(iso) {
   return date.toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
-function isUnread(message) {
-  if (!message || message.sender !== 'companion') return false
-  const lastReadAt = localStorage.getItem(LAST_READ_KEY)
-  if (!lastReadAt) return true
-  return new Date(message.created_at) > new Date(lastReadAt)
-}
-
 export default function ChatListPage() {
   const navigate = useNavigate()
   const [lastMessage, setLastMessage] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [unread, setUnread] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [filter, setFilter] = useState('all') // 'all' | 'unread'
   const [searchQuery, setSearchQuery] = useState('')
   const [toast, showToast] = useComingSoonToast()
+
+  const unread = unreadCount > 0
 
   useEffect(() => {
     async function loadLastMessage() {
@@ -46,20 +40,40 @@ export default function ChatListPage() {
         .limit(1)
 
       if (!error) {
-        const latest = data?.[0] ?? null
-        setLastMessage(latest)
-        setUnread(isUnread(latest))
+        setLastMessage(data?.[0] ?? null)
       }
       // No `loading` flag: the row below renders on the very first paint,
       // using its own fallback text until this resolves, then this just
       // quietly updates it in place - no spinner, no flash, no "Loading...".
     }
 
+    async function loadUnreadCount() {
+      // Counts companion messages that arrived after the last time this
+      // chat was actually open - not just "is the newest message new",
+      // so the badge can show a real number instead of a dot.
+      const lastReadAt = getLastReadAt()
+      let query = supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('sender', 'companion')
+
+      if (lastReadAt) {
+        query = query.gt('created_at', lastReadAt)
+      }
+
+      const { count, error } = await query
+      if (!error) setUnreadCount(count ?? 0)
+    }
+
     loadLastMessage()
+    loadUnreadCount()
 
     // Live-updates the preview the moment a new message lands - whether
     // it's the companion's reply finishing in the background or a
     // message sent from another device - no reopening the chat needed.
+    // This subscription is only active while this page is mounted, i.e.
+    // while the user is NOT inside the chat itself - so every INSERT it
+    // sees here is, by definition, a message the user hasn't viewed yet.
     const channel = supabase
       .channel('chat-list-messages')
       .on(
@@ -67,7 +81,9 @@ export default function ChatListPage() {
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
           setLastMessage(payload.new)
-          setUnread(isUnread(payload.new))
+          if (isMessageUnread(payload.new)) {
+            setUnreadCount((count) => count + 1)
+          }
         }
       )
       .subscribe()
@@ -83,6 +99,10 @@ export default function ChatListPage() {
   }
 
   function openChat() {
+    // Optimistic - the real read-marker gets written from inside the
+    // chat itself (using the messages' own server timestamps), this just
+    // clears the badge instantly instead of waiting on that round trip.
+    setUnreadCount(0)
     navigate('/chat')
   }
 
@@ -123,7 +143,11 @@ export default function ChatListPage() {
               ? `${lastMessage.sender === 'user' ? 'You: ' : ''}${lastMessage.content}`
               : 'Ask me to remind you about something'}
           </p>
-          {unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />}
+          {unread && (
+            <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </div>
       </div>
     </button>

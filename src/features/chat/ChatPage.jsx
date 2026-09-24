@@ -3,11 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { registerPushNotifications } from '../../lib/pushNotifications'
 import { sounds } from '../../lib/sounds'
+import { markReadUpTo } from '../../lib/chatRead'
 import Avatar from '../../components/Avatar'
 import { BackArrowIcon, CheckIcon, MoreVerticalIcon, SendIcon } from '../../components/Icons'
 import companionAvatar from '../../assets/companion-avatar.png'
 
-const LAST_READ_KEY = 'companion_last_read_at'
 const SOFT_ASK_DISMISS_KEY = 'notif_soft_ask_dismiss_count'
 const DENIED_NOTICE_SEEN_KEY = 'notif_denied_notice_seen'
 const MAX_SOFT_ASKS = 3
@@ -189,9 +189,12 @@ export default function ChatPage() {
 
     if (messages.length > 0) {
       hasOpenedChatRef.current = false
+      // Mark as read using the LAST MESSAGE'S OWN server timestamp, not
+      // a client-side "now" reading - see chatRead.js for why that
+      // distinction matters. `messages` is loaded/appended in
+      // created_at order, so the final entry is always the newest.
+      markReadUpTo(messages[messages.length - 1].created_at)
     }
-
-    localStorage.setItem(LAST_READ_KEY, new Date().toISOString())
   }, [messages, sending])
 
   async function sendMessage(rawText) {
