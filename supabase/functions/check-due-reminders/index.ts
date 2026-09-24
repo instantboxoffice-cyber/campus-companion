@@ -12,7 +12,7 @@ type ReminderRow = {
   task: string
   due_at: string
   recurrence: string | null
-  completed: boolean
+  status: string
   created_at: string
 }
 
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       .from("reminders")
       .select("*")
       .lte("due_at", now)
-      .eq("completed", false)
+      .eq("status", "pending")
 
     if (fetchError) {
       return new Response(JSON.stringify({ error: fetchError.message }), {
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
       if (!reminder.recurrence) {
         const { error: completeError } = await serviceClient
           .from("reminders")
-          .update({ completed: true })
+          .update({ status: "completed" })
           .eq("id", reminder.id)
 
         if (completeError) {
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
 
       const { error: rescheduleError } = await serviceClient
         .from("reminders")
-        .update({ due_at: nextDueAt.toISOString(), completed: false })
+        .update({ due_at: nextDueAt.toISOString(), status: "pending" })
         .eq("id", reminder.id)
 
       if (rescheduleError) {

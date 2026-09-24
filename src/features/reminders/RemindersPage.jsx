@@ -29,15 +29,17 @@ export default function RemindersPage() {
     loadReminders()
   }, [])
 
-  async function toggleReminder(id, currentDone) {
+  async function toggleReminder(id, currentStatus) {
+    const nextStatus = currentStatus === 'completed' ? 'pending' : 'completed'
+
     const { error } = await supabase
       .from('reminders')
-      .update({ completed: !currentDone })
+      .update({ status: nextStatus })
       .eq('id', id)
 
     if (!error) {
       setReminders((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, completed: !currentDone } : r))
+        prev.map((r) => (r.id === id ? { ...r, status: nextStatus } : r))
       )
     }
   }
@@ -72,10 +74,10 @@ export default function RemindersPage() {
                 className="flex items-center gap-3 border-b border-slate-100 px-4 py-3"
               >
                 <button
-                  onClick={() => toggleReminder(reminder.id, reminder.completed)}
-                  aria-label={reminder.completed ? 'Mark as not done' : 'Mark as done'}
+                  onClick={() => toggleReminder(reminder.id, reminder.status)}
+                  aria-label={reminder.status === 'completed' ? 'Mark as not done' : 'Mark as done'}
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition ${
-                    reminder.completed
+                    reminder.status === 'completed'
                       ? 'border-primary bg-primary text-white'
                       : 'border-slate-300 text-transparent'
                   }`}
@@ -84,7 +86,7 @@ export default function RemindersPage() {
                 </button>
 
                 <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium ${reminder.completed ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                  <p className={`text-sm font-medium ${reminder.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                     {reminder.task}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">
