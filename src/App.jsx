@@ -7,6 +7,9 @@ import UpdatesPage from './features/updates/UpdatesPage'
 import CallsPage from './features/calls/CallsPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import InstallPrompt from './components/InstallPrompt'
+import { sounds } from './lib/sounds'
+
+   sounds.attachGlobalClickSound()
 
 function App() {
   return (

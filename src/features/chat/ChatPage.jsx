@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { registerPushNotifications } from '../../lib/pushNotifications'
+import { sounds } from '../../lib/sounds'
 import Avatar from '../../components/Avatar'
 import { BackArrowIcon, CheckIcon, MoreVerticalIcon, SendIcon } from '../../components/Icons'
 import companionAvatar from '../../assets/companion-avatar.png'
@@ -33,6 +34,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [userId, setUserId] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [muted, setMuted] = useState(() => sounds.isMuted())
   const [notifPermission, setNotifPermission] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   )
@@ -109,6 +111,12 @@ export default function ChatPage() {
     await requestAndRegisterNotifications()
   }
 
+  function handleToggleMute() {
+    const next = sounds.toggleMuted()
+    setMuted(next)
+    setMenuOpen(false)
+  }
+
   async function loadMessages() {
     const { data, error } = await supabase
       .from('messages')
@@ -128,9 +136,16 @@ export default function ChatPage() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
-          setMessages((prev) =>
-            prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new]
-          )
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === payload.new.id)) return prev
+            // Covers both a live companion reply and a reminder firing
+            // while the chat happens to be open - both arrive as a real
+            // INSERT here, so this is the one place that needs to play
+            // the "received" sound rather than duplicating it wherever
+            // a companion message might originate.
+            if (payload.new.sender === 'companion') sounds.received()
+            return [...prev, payload.new]
+          })
         }
       )
       .subscribe()
@@ -183,6 +198,7 @@ export default function ChatPage() {
     const userText = rawText.trim()
     if (!userText || sending) return
 
+    sounds.sent()
     setSending(true)
 
     const { data: userMsg, error: userMsgError } = await supabase
@@ -314,6 +330,12 @@ export default function ChatPage() {
                   className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
                 >
                   Reminders
+                </button>
+                <button
+                  onClick={handleToggleMute}
+                  className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
+                >
+                  {muted ? 'Unmute sounds' : 'Mute sounds'}
                 </button>
                 {notifPermission === 'granted' ? (
                   <div className="block w-full px-4 py-2.5 text-left text-slate-400">

@@ -70,6 +70,12 @@ Deno.serve(async (req) => {
 
     const reminders = (dueReminders ?? []) as ReminderRow[]
 
+    const RECURRENCE_STEPS: Record<string, (d: Date) => void> = {
+      daily: (d) => d.setDate(d.getDate() + 1),
+      weekly: (d) => d.setDate(d.getDate() + 7),
+      monthly: (d) => d.setMonth(d.getMonth() + 1),
+    }
+
     for (const reminder of reminders) {
       const { error: createMessageError } = await serviceClient.from("messages").insert({
         user_id: reminder.user_id,
@@ -87,10 +93,23 @@ Deno.serve(async (req) => {
         console.error("Failed to send reminder push notification", pushError)
       }
 
-      if (!reminder.recurrence) {
+      const applyStep = RECURRENCE_STEPS[reminder.recurrence ?? ""]
+
+      if (!applyStep) {
+        // Anything that isn't exactly "daily"/"weekly"/"monthly" - null,
+        // empty string, or any unexpected value the model might have
+        // saved instead of null - is treated as one-off and closed out.
+        // Must write "done", not "completed": the reminders_status_check
+        // constraint only allows pending/sent/done/cancelled, so writing
+        // "completed" fails the constraint, the update silently errors
+        // out (console.error only - nothing stops or resets due_at), and
+        // the row is still "pending" for the very next cron run to pick
+        // straight back up. That silent failure was the actual cause of
+        // reminders looping every minute, independent of the recurrence
+        // fallback logic below.
         const { error: completeError } = await serviceClient
           .from("reminders")
-          .update({ status: "completed" })
+          .update({ status: "done" })
           .eq("id", reminder.id)
 
         if (completeError) {
@@ -100,14 +119,7 @@ Deno.serve(async (req) => {
       }
 
       const nextDueAt = new Date(reminder.due_at)
-
-      if (reminder.recurrence === "daily") {
-        nextDueAt.setDate(nextDueAt.getDate() + 1)
-      } else if (reminder.recurrence === "weekly") {
-        nextDueAt.setDate(nextDueAt.getDate() + 7)
-      } else if (reminder.recurrence === "monthly") {
-        nextDueAt.setMonth(nextDueAt.getMonth() + 1)
-      }
+      applyStep(nextDueAt)
 
       const { error: rescheduleError } = await serviceClient
         .from("reminders")
