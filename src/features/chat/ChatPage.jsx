@@ -38,11 +38,39 @@ export default function ChatPage() {
   const [notifPermission, setNotifPermission] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   )
+  // Tracks whether a push subscription is ACTUALLY saved server-side -
+  // separate from notifPermission, which only reflects the OS-level
+  // permission prompt. Permission can be "granted" while the actual
+  // subscribe() call has silently failed underneath it, and that gap is
+  // exactly what was leaving some phones stuck with no way to retry.
+  const [pushSubscribed, setPushSubscribed] = useState(false)
   const [showSoftAsk, setShowSoftAsk] = useState(false)
   const [showDeniedNotice, setShowDeniedNotice] = useState(false)
   const scrollRef = useRef(null)
   const hasOpenedChatRef = useRef(true)
   const forwardedQueryHandledRef = useRef(false)
+
+  async function attemptPushRegistration(uid) {
+    if (!uid) return { enabled: false, reason: 'User is not signed in yet.' }
+    try {
+      const result = await registerPushNotifications(supabase, uid)
+      setPushSubscribed(result.enabled)
+      if (!result.enabled) {
+        console.info('Push notifications were not enabled:', result.reason)
+      }
+      return result
+    } catch (error) {
+      // registerPushNotifications() doesn't catch its own errors
+      // internally (a rejected pushManager.subscribe() call, a Supabase
+      // upsert error, etc. all propagate up as a throw) - this is the
+      // one place that turns that into something visible instead of an
+      // unhandled promise rejection nobody but a plugged-in debugger
+      // would ever see.
+      console.error('Push registration error:', error)
+      setPushSubscribed(false)
+      return { enabled: false, reason: error?.message || 'Unknown error while subscribing.' }
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -50,15 +78,7 @@ export default function ChatPage() {
       setUserId(nextUserId)
 
       if (nextUserId) {
-        registerPushNotifications(supabase, nextUserId)
-          .then((result) => {
-            if (!result.enabled) {
-              console.info('Push notifications were not enabled:', result.reason)
-            }
-          })
-          .catch((error) => {
-            console.error('Push registration error:', error)
-          })
+        attemptPushRegistration(nextUserId)
       }
     })
   }, [])
@@ -72,7 +92,7 @@ export default function ChatPage() {
 
   async function requestAndRegisterNotifications() {
     if (!canRequestNotificationPermission()) {
-      console.warn('This browser/context does not support push notifications.')
+      window.alert('This browser/context does not support push notifications.')
       return
     }
 
@@ -80,9 +100,9 @@ export default function ChatPage() {
     setNotifPermission(permission)
 
     if (permission === 'granted') {
-      const result = await registerPushNotifications(supabase, userId)
+      const result = await attemptPushRegistration(userId)
       if (!result.enabled) {
-        console.info('Push notifications were not enabled:', result.reason)
+        window.alert(`Notifications are on, but subscribing failed: ${result.reason}`)
       }
     }
   }
@@ -91,19 +111,19 @@ export default function ChatPage() {
     setMenuOpen(false)
 
     if (!('Notification' in window)) {
-      console.warn('This browser does not support notifications.')
+      window.alert('This browser does not support notifications.')
       return
     }
 
     if (Notification.permission === 'denied') {
-      console.warn('Notification permission was denied. Enable notifications in the browser settings.')
+      window.alert('Notification permission was denied. Enable notifications in the browser settings.')
       return
     }
 
     if (Notification.permission === 'granted') {
-      const result = await registerPushNotifications(supabase, userId)
+      const result = await attemptPushRegistration(userId)
       if (!result.enabled) {
-        console.info('Push notifications were not enabled:', result.reason)
+        window.alert(`Notifications are on, but subscribing failed: ${result.reason}`)
       }
       return
     }
@@ -340,7 +360,7 @@ export default function ChatPage() {
                 >
                   {muted ? 'Unmute sounds' : 'Mute sounds'}
                 </button>
-                {notifPermission === 'granted' ? (
+                {notifPermission === 'granted' && pushSubscribed ? (
                   <div className="block w-full px-4 py-2.5 text-left text-slate-400">
                     Notifications on
                   </div>
@@ -349,7 +369,7 @@ export default function ChatPage() {
                     onClick={handleEnableNotifications}
                     className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
                   >
-                    Enable notifications
+                    {notifPermission === 'granted' ? 'Retry notifications' : 'Enable notifications'}
                   </button>
                 )}
                 <button
