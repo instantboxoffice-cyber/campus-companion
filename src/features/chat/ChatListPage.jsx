@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { getLastReadAt, isMessageUnread } from '../../lib/chatRead'
@@ -28,25 +28,32 @@ export default function ChatListPage() {
   const [filter, setFilter] = useState('all') // 'all' | 'unread'
   const [searchQuery, setSearchQuery] = useState('')
   const [toast, showToast] = useComingSoonToast()
+  // Three real states, not two: we may still be checking, we may have
+  // checked and genuinely found nothing (a brand-new user), or the check
+  // itself may have failed (no network, a dropped request, etc). Those
+  // last two look completely different to a person and must not share
+  // one fallback line - "couldn't check" is not the same as "no messages".
+  const [previewStatus, setPreviewStatus] = useState('loading') // 'loading' | 'loaded' | 'error'
 
   const unread = unreadCount > 0
 
-  useEffect(() => {
-    async function loadLastMessage() {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
+  const loadLastMessage = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
 
-      if (!error) {
-        setLastMessage(data?.[0] ?? null)
-      }
-      // No `loading` flag: the row below renders on the very first paint,
-      // using its own fallback text until this resolves, then this just
-      // quietly updates it in place - no spinner, no flash, no "Loading...".
+    if (error) {
+      setPreviewStatus('error')
+      return
     }
 
+    setLastMessage(data?.[0] ?? null)
+    setPreviewStatus('loaded')
+  }, [])
+
+  useEffect(() => {
     async function loadUnreadCount() {
       // Counts companion messages that arrived after the last time this
       // chat was actually open - not just "is the newest message new",
@@ -81,6 +88,7 @@ export default function ChatListPage() {
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
           setLastMessage(payload.new)
+          setPreviewStatus('loaded')
           if (isMessageUnread(payload.new)) {
             setUnreadCount((count) => count + 1)
           }
@@ -91,7 +99,29 @@ export default function ChatListPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [loadLastMessage])
+
+  // The moment the browser tells us the connection is back, try again
+  // right away - don't leave the user staring at a stale "couldn't
+  // check" (or worse, a wrong "no messages") until they happen to
+  // reopen the app.
+  useEffect(() => {
+    function handleOnline() {
+      loadLastMessage()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [loadLastMessage])
+
+  // A failed request isn't always because the browser is fully offline
+  // (navigator can say "online" while a request still times out) - so on
+  // top of the online-event retry above, try once more a few seconds
+  // later on its own.
+  useEffect(() => {
+    if (previewStatus !== 'error') return
+    const timeoutId = setTimeout(loadLastMessage, 4000)
+    return () => clearTimeout(timeoutId)
+  }, [previewStatus, loadLastMessage])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -124,6 +154,18 @@ export default function ChatListPage() {
 
   const showChatRow = !isSearching && (filter === 'all' || (filter === 'unread' && unread))
 
+  let previewText = ''
+  if (previewStatus === 'error') {
+    previewText = "Couldn't load — check your connection"
+  } else if (previewStatus === 'loaded') {
+    previewText = lastMessage
+      ? `${lastMessage.sender === 'user' ? 'You: ' : ''}${lastMessage.content}`
+      : 'Ask me to remind you about something'
+  }
+  // While previewStatus is 'loading', previewText stays '' - an honest
+  // blank beats confidently claiming either "no messages" or an error
+  // before we've actually found out which one is true.
+
   const chatRow = (
     <button
       onClick={openChat}
@@ -138,10 +180,16 @@ export default function ChatListPage() {
           </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className={`truncate text-sm ${unread ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
-            {lastMessage
-              ? `${lastMessage.sender === 'user' ? 'You: ' : ''}${lastMessage.content}`
-              : 'Ask me to remind you about something'}
+          <p
+            className={`truncate text-sm ${
+              previewStatus === 'error'
+                ? 'italic text-amber-600'
+                : unread
+                  ? 'font-semibold text-slate-900'
+                  : 'text-slate-500'
+            }`}
+          >
+            {previewText}
           </p>
           {unread && (
             <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white">
