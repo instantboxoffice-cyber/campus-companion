@@ -30,7 +30,12 @@ export default function RemindersPage() {
   }, [])
 
   async function toggleReminder(id, currentStatus) {
-    const nextStatus = currentStatus === 'completed' ? 'pending' : 'completed'
+    // The reminders table only allows status to be one of: pending, sent,
+    // done, cancelled (a database rule called a "check constraint").
+    // "completed" isn't one of those, so writing it was always being
+    // rejected by the database - the button looked like it did nothing
+    // because the update never actually went through.
+    const nextStatus = currentStatus === 'done' ? 'pending' : 'done'
 
     const { error } = await supabase
       .from('reminders')
@@ -75,9 +80,9 @@ export default function RemindersPage() {
               >
                 <button
                   onClick={() => toggleReminder(reminder.id, reminder.status)}
-                  aria-label={reminder.status === 'completed' ? 'Mark as not done' : 'Mark as done'}
+                  aria-label={reminder.status === 'done' ? 'Mark as not done' : 'Mark as done'}
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition ${
-                    reminder.status === 'completed'
+                    reminder.status === 'done'
                       ? 'border-primary bg-primary text-white'
                       : 'border-slate-300 text-transparent'
                   }`}
@@ -86,7 +91,7 @@ export default function RemindersPage() {
                 </button>
 
                 <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium ${reminder.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                  <p className={`text-sm font-medium ${reminder.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                     {reminder.task}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">

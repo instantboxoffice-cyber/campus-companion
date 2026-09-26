@@ -1,9 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "@supabase/supabase-js"
+import { sendPushToUser } from "../_shared/sendPush.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 }
 
 type ReminderRow = {
@@ -16,20 +17,10 @@ type ReminderRow = {
   created_at: string
 }
 
-async function sendReminderPush(supabaseUrl: string, supabaseKey: string, reminder: ReminderRow) {
-  const pushUrl = new URL('/functions/v1/send-reminder-push', supabaseUrl).toString()
-
-  const res = await fetch(pushUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${supabaseKey}`,
-      apikey: supabaseKey,
-    },
-    body: JSON.stringify({ reminder }),
-  })
-
-  return await res.json()
+const RECURRENCE_STEPS: Record<string, (d: Date) => void> = {
+  daily: (d) => d.setDate(d.getDate() + 1),
+  weekly: (d) => d.setDate(d.getDate() + 7),
+  monthly: (d) => d.setMonth(d.getMonth() + 1),
 }
 
 Deno.serve(async (req) => {
@@ -38,6 +29,21 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // This function acts on every user's reminders with full admin rights,
+    // and it's only ever meant to be woken up by our own cron job - never
+    // by a browser. The cron job sends this exact secret in a header;
+    // anyone who doesn't know it (including someone who just guesses this
+    // URL) is turned away before touching the database.
+    const cronSecret = Deno.env.get("CRON_SECRET")
+    const providedSecret = req.headers.get("x-cron-secret")
+
+    if (!cronSecret || providedSecret !== cronSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
 
@@ -52,7 +58,6 @@ Deno.serve(async (req) => {
     }
 
     const serviceClient = createClient(supabaseUrl, supabaseKey)
-
     const now = new Date().toISOString()
 
     const { data: dueReminders, error: fetchError } = await serviceClient
@@ -69,14 +74,27 @@ Deno.serve(async (req) => {
     }
 
     const reminders = (dueReminders ?? []) as ReminderRow[]
-
-    const RECURRENCE_STEPS: Record<string, (d: Date) => void> = {
-      daily: (d) => d.setDate(d.getDate() + 1),
-      weekly: (d) => d.setDate(d.getDate() + 7),
-      monthly: (d) => d.setMonth(d.getMonth() + 1),
-    }
+    let processed = 0
 
     for (const reminder of reminders) {
+      // Claim this reminder before doing anything else with it. The WHERE
+      // clause below only matches a row that is STILL "pending" the
+      // instant this update runs. If a slightly-overlapping run (or a
+      // slow previous run) already flipped it to "sent", this update
+      // touches zero rows and we skip it - so the same reminder can never
+      // be pushed twice, no matter how the timing lines up.
+      const { data: claimed, error: claimError } = await serviceClient
+        .from("reminders")
+        .update({ status: "sent" })
+        .eq("id", reminder.id)
+        .eq("status", "pending")
+        .select()
+        .single()
+
+      if (claimError || !claimed) {
+        continue
+      }
+
       const { error: createMessageError } = await serviceClient.from("messages").insert({
         user_id: reminder.user_id,
         sender: "companion",
@@ -88,51 +106,46 @@ Deno.serve(async (req) => {
       }
 
       try {
-        await sendReminderPush(supabaseUrl, supabaseKey, reminder)
+        await sendPushToUser(serviceClient, reminder.user_id, {
+          title: "Companion",
+          body: `Reminder: ${reminder.task}`,
+          url: "/chat",
+          tag: `reminder-${reminder.id}`,
+          type: "reminder",
+          urgency: "high",
+          ttl: 3600,
+        })
       } catch (pushError) {
         console.error("Failed to send reminder push notification", pushError)
       }
 
+      processed++
+
       const applyStep = RECURRENCE_STEPS[reminder.recurrence ?? ""]
 
-      if (!applyStep) {
-        // Anything that isn't exactly "daily"/"weekly"/"monthly" - null,
-        // empty string, or any unexpected value the model might have
-        // saved instead of null - is treated as one-off and closed out.
-        // Must write "done", not "completed": the reminders_status_check
-        // constraint only allows pending/sent/done/cancelled, so writing
-        // "completed" fails the constraint, the update silently errors
-        // out (console.error only - nothing stops or resets due_at), and
-        // the row is still "pending" for the very next cron run to pick
-        // straight back up. That silent failure was the actual cause of
-        // reminders looping every minute, independent of the recurrence
-        // fallback logic below.
-        const { error: completeError } = await serviceClient
+      if (applyStep) {
+        // Recurring reminder: it briefly sat at "sent" from the claim
+        // above, and now moves straight back to "pending" at its next
+        // occurrence so the cron job picks it up again later.
+        const nextDueAt = new Date(reminder.due_at)
+        applyStep(nextDueAt)
+
+        const { error: rescheduleError } = await serviceClient
           .from("reminders")
-          .update({ status: "done" })
+          .update({ due_at: nextDueAt.toISOString(), status: "pending" })
           .eq("id", reminder.id)
 
-        if (completeError) {
-          console.error("Failed to complete one-off reminder", completeError)
+        if (rescheduleError) {
+          console.error("Failed to reschedule recurring reminder", rescheduleError)
         }
-        continue
       }
-
-      const nextDueAt = new Date(reminder.due_at)
-      applyStep(nextDueAt)
-
-      const { error: rescheduleError } = await serviceClient
-        .from("reminders")
-        .update({ due_at: nextDueAt.toISOString(), status: "pending" })
-        .eq("id", reminder.id)
-
-      if (rescheduleError) {
-        console.error("Failed to reschedule recurring reminder", rescheduleError)
-      }
+      // One-off reminders stay at "sent" - meaning "fired, not yet
+      // actioned". The Reminders page is what lets the user tick it over
+      // to "done" themselves, same as ticking off anything else on the list.
     }
 
     return new Response(
-      JSON.stringify({ processed: reminders.length, checkedAt: now }),
+      JSON.stringify({ processed, checkedAt: now }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   } catch (error) {
