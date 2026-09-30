@@ -420,6 +420,21 @@ export default function ChatPage() {
                       : 'bubble-tail-received bg-bubble-received text-slate-800'
                   }`}
                 >
+                  {msg.image_url && (
+                    <a
+                      href={msg.image_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mb-1.5 block w-64 max-w-full overflow-hidden rounded-lg bg-slate-200"
+                    >
+                      <img
+                        src={msg.image_url}
+                        alt="Picture made by Companion"
+                        loading="lazy"
+                        className="aspect-square w-full object-contain"
+                      />
+                    </a>
+                  )}
                   <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                   <div className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${isUser ? 'text-sky-100/80' : 'text-slate-400'}`}>
                     <span>{formatBubbleTime(msg.created_at)}</span>
