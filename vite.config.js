@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
   const supabaseUrl = env.VITE_SUPABASE_URL || 'https://rkvkmgipeholfltfwize.supabase.co'
 
   return {
+    define: {
+      __APP_BUILD__: JSON.stringify(new Date().toISOString()),
+    },
     plugins: [
       react(),
       tailwindcss(),

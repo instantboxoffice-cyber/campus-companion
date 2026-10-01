@@ -133,6 +133,18 @@ Tailwind v4 theme tokens (add to `index.css` under the `@theme` block once the U
 - **Deliberate deviation from WhatsApp:** WhatsApp's chat header also has video-call/voice-call icons. Since there's nothing for those to do in an AI-companion app, they were left out rather than added as decoration that does nothing when tapped — the header instead has a `⋮` overflow menu (Reminders / Log out), which keeps WhatsApp's icon-only header language without shipping dead buttons. Flag it if a full 1:1 visual match matters more than that.
 - **Not done in this pass:** chat-list unread badges (would need a `read` column added to `messages`, currently out of scope), a splash/welcome screen before the email step, dark mode
 
+**Phase 3 — friend-to-friend chat:**
+- Added `profiles`, `friendships`, and `direct_messages` tables, with the `mark_dms_read` and `get_conversations` SQL functions
+- Added the `/friends` and `/dm/:friendId` routes; friend chat is text-only and does not have push notifications yet
+- Run `supabase/migrations/20261003_create_direct_messages.sql` in Supabase Dashboard > SQL Editor; it has not been run from this workspace
+
+**Phase 3B — people list, usernames, and app updates:**
+- The Friends page has a browsable Add people tab backed by `get_people_to_add`, with optional username search
+- `UsernameGate` requires every user to choose a username, pre-filled from their email when possible
+- `appUpdate.js` checks for service-worker updates every 30 minutes and when the app returns to the screen; the chat-list menu includes Check for updates, Force refresh, and the build time
+- Keep `registerType` set to `autoUpdate` and keep `skipWaiting()` in `src/sw.js`
+- Run `supabase/migrations/20261004_people_list_and_profile_fixes.sql` in Supabase Dashboard > SQL Editor; it has not been run from this workspace
+
 **Not started:**
 - Phase 4 — Web Push registration and delivery (scaffolding for this exists in `pushNotifications.js` / `send-reminder-push`, not yet verified end-to-end)
 - Phase 5 — polish (dark mode, recurrence editing UI)

@@ -1,12 +1,17 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
+import { useUserCount } from '../../lib/useUserCount'
+import { useFriends } from '../../lib/useFriends'
+import { useConversations } from '../../lib/useConversations'
 import { getLastReadAt, isMessageUnread } from '../../lib/chatRead'
 import Avatar from '../../components/Avatar'
 import BottomNav from '../../components/BottomNav'
 import { useComingSoonToast } from '../../components/ComingSoonToast'
-import { CameraIcon, ChatBubbleIcon, MoreVerticalIcon, SearchIcon, XIcon } from '../../components/Icons'
+import ConversationRow from './ConversationRow'
+import { CameraIcon, ChatBubbleIcon, MoreVerticalIcon, SearchIcon, UserPlusIcon, XIcon } from '../../components/Icons'
 import companionAvatar from '../../assets/companion-avatar.png'
+import { buildLabel, checkForUpdate, forceRefresh } from '../../lib/appUpdate'
 
 function formatTimestamp(iso) {
   if (!iso) return ''
@@ -22,6 +27,9 @@ function formatTimestamp(iso) {
 
 export default function ChatListPage() {
   const navigate = useNavigate()
+  const userCount = useUserCount()
+  const { incoming } = useFriends()
+  const { conversations } = useConversations()
   const [lastMessage, setLastMessage] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -128,6 +136,21 @@ export default function ChatListPage() {
     navigate('/auth', { replace: true })
   }
 
+  async function handleCheckUpdate() {
+    setMenuOpen(false)
+    showToast('Checking for updates...')
+    const result = await checkForUpdate()
+    if (result === 'updating') showToast('Update found - restarting...')
+    else if (result === 'latest') showToast("You're on the latest version")
+    else showToast("Couldn't check - try again")
+  }
+
+  async function handleForceRefresh() {
+    setMenuOpen(false)
+    showToast('Refreshing...')
+    await forceRefresh()
+  }
+
   function openChat() {
     // Optimistic - the real read-marker gets written from inside the
     // chat itself (using the messages' own server timestamps), this just
@@ -153,6 +176,13 @@ export default function ChatListPage() {
     ('companion'.includes(lowerQuery) || (lastMessage?.content ?? '').toLowerCase().includes(lowerQuery))
 
   const showChatRow = !isSearching && (filter === 'all' || (filter === 'unread' && unread))
+  const friendRows = conversations.filter((c) => {
+    if (isSearching) {
+      return (c.username ?? '').toLowerCase().includes(lowerQuery) || (c.last_content ?? '').toLowerCase().includes(lowerQuery)
+    }
+    return filter === 'all' || c.unread_count > 0
+  })
+  const companionVisible = isSearching ? chatMatchesSearch : showChatRow
 
   let previewText = ''
   if (previewStatus === 'error') {
@@ -217,12 +247,18 @@ export default function ChatListPage() {
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-lg bg-white text-sm text-slate-800 shadow-xl">
+                  <div className="absolute right-0 top-8 z-20 w-52 overflow-hidden rounded-lg bg-white text-sm text-slate-800 shadow-xl">
                     <button
                       onClick={() => { setMenuOpen(false); showToast('Settings coming soon') }}
                       className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
                     >
                       Settings
+                    </button>
+                    <button onClick={handleCheckUpdate} className="block w-full px-4 py-2.5 text-left hover:bg-slate-50">
+                      Check for updates
+                    </button>
+                    <button onClick={handleForceRefresh} className="block w-full px-4 py-2.5 text-left hover:bg-slate-50">
+                      Force refresh
                     </button>
                     <button
                       onClick={handleLogout}
@@ -230,12 +266,22 @@ export default function ChatListPage() {
                     >
                       Log out
                     </button>
+                    <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
+                      Version {buildLabel()}
+                    </p>
                   </div>
                 </>
               )}
             </div>
           </div>
         </div>
+
+        {userCount !== null && (
+          <p className="mt-1 px-4 text-sm text-white/60">
+            <span className="font-semibold text-accent">{userCount.toLocaleString()}</span>{' '}
+            {userCount === 1 ? 'person' : 'people'} on Campus Companion
+          </p>
+        )}
 
         <div className="mx-4 mt-3 flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-white/60 focus-within:bg-white/15">
           <SearchIcon className="h-4 w-4 shrink-0" />
@@ -282,7 +328,7 @@ export default function ChatListPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        {isSearching ? (
+        {isSearching && (
           <>
             <button
               onClick={() => askCompanion(trimmedQuery)}
@@ -296,22 +342,34 @@ export default function ChatListPage() {
                 <p className="truncate text-sm text-primary">&ldquo;{trimmedQuery}&rdquo;</p>
               </div>
             </button>
-
-            <p className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Chats
-            </p>
-            {chatMatchesSearch ? (
-              chatRow
-            ) : (
-              <p className="px-4 pb-6 text-sm text-slate-400">No chats found.</p>
-            )}
+            <p className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Chats</p>
           </>
-        ) : showChatRow ? (
-          chatRow
-        ) : (
-          <p className="p-6 text-center text-sm text-slate-400">No unread chats.</p>
+        )}
+
+        {companionVisible && chatRow}
+        {friendRows.map((c) => (
+          <ConversationRow key={c.other_id} convo={c} onOpen={() => navigate(`/dm/${c.other_id}`)} />
+        ))}
+
+        {!companionVisible && friendRows.length === 0 && (
+          <p className="p-6 text-center text-sm text-slate-400">
+            {isSearching ? 'No chats found.' : 'No unread chats.'}
+          </p>
         )}
       </main>
+
+      <button
+        onClick={() => navigate('/friends')}
+        aria-label="Friends"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg"
+      >
+        <UserPlusIcon className="h-6 w-6" />
+        {incoming.length > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold">
+            {incoming.length}
+          </span>
+        )}
+      </button>
 
       {toast}
       <BottomNav active="chats" />
