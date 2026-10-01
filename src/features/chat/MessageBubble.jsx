@@ -2,7 +2,7 @@ import { memo, useRef, useState } from 'react'
 import FormattedText from '../../lib/formatText'
 import { formatBubbleTime } from '../../lib/messageUtils'
 import { CheckIcon } from '../../components/Icons'
-import { ChevronDownIcon, ClockIcon, ReplyIcon, StarIcon } from '../../components/ChatIcons'
+import { ChevronDownIcon, ClockIcon, ReplyIcon, SpeakerIcon, StarIcon, StopIcon } from '../../components/ChatIcons'
 import companionAvatar from '../../assets/companion-avatar.png'
 
 const SWIPE_TRIGGER = 56
@@ -18,6 +18,8 @@ function MessageBubble({
   onRetry,
   onJump,
   onOpenImage,
+  onSpeak,
+  speaking,
 }) {
   const isUser = msg.sender === 'user'
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -127,12 +129,25 @@ function MessageBubble({
     </button>
   ) : null
 
-  const showMeta = endsGroup || msg.starred || msg.status === 'failed'
+  const canSpeak = !isUser && !!msg.content
+  const showMeta = endsGroup || msg.starred || msg.status === 'failed' || speaking
   const meta = showMeta ? (
     <div
       className={`mt-1 flex items-center gap-1.5 text-[11px] text-slate-400 ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       {msg.starred && <StarIcon filled className="h-3 w-3 text-amber-400" />}
+      {canSpeak && (
+        <button
+          type="button"
+          onClick={() => onSpeak(msg)}
+          aria-label={speaking ? 'Stop reading' : 'Listen'}
+          className={`flex h-5 w-5 items-center justify-center rounded-full ${
+            speaking ? 'bg-sky-100 text-primary' : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          {speaking ? <StopIcon className="h-3 w-3" /> : <SpeakerIcon className="h-3.5 w-3.5" />}
+        </button>
+      )}
       {msg.status === 'failed' ? (
         <button type="button" onClick={() => onRetry(msg)} className="font-medium text-red-500">
           Not sent · Tap to retry

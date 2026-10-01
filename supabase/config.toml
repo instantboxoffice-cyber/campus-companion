@@ -9,3 +9,14 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/parse-reminder/deno.json"
 entrypoint = "./functions/check-due-reminders/index.ts"
+[functions.transcribe]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/transcribe/index.ts"
+
+[functions.speak]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/speak/index.ts"

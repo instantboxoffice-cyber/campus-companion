@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { messagePreview } from '../../lib/messageUtils'
 import { ShareIcon, TrashIcon } from '../../components/Icons'
-import { CopyIcon, DownloadIcon, ReplyIcon, StarIcon } from '../../components/ChatIcons'
+import { CopyIcon, DownloadIcon, ReplyIcon, SpeakerIcon, StarIcon, StopIcon } from '../../components/ChatIcons'
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '🙏', '🔥']
 
@@ -30,6 +30,8 @@ export default function MessageSheet({
   onShare,
   onSaveImage,
   onDelete,
+  onSpeak,
+  speaking,
 }) {
   useEffect(() => {
     function handleKey(e) {
@@ -68,6 +70,13 @@ export default function MessageSheet({
 
         <Row icon={<ReplyIcon />} label="Reply" onClick={() => onReply(msg)} />
         {msg.content && <Row icon={<CopyIcon />} label="Copy text" onClick={() => onCopy(msg)} />}
+        {msg.sender === 'companion' && msg.content && (
+          <Row
+            icon={speaking ? <StopIcon className="h-5 w-5" /> : <SpeakerIcon />}
+            label={speaking ? 'Stop reading' : 'Listen'}
+            onClick={() => onSpeak(msg)}
+          />
+        )}
         <Row
           icon={<StarIcon filled={!!msg.starred} className={`h-5 w-5 ${msg.starred ? 'text-amber-400' : ''}`} />}
           label={msg.starred ? 'Remove star' : 'Star'}

@@ -81,3 +81,31 @@ export function SparklesIcon({ className = 'h-5 w-5' }) {
     </svg>
   )
 }
+
+export function MicIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+    </svg>
+  )
+}
+
+export function StopIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className} fill="currentColor" stroke="none">
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  )
+}
+
+export function SpeakerIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className}>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+    </svg>
+  )
+}

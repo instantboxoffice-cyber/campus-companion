@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { registerPushNotifications } from '../../lib/pushNotifications'
 import { sounds } from '../../lib/sounds'
 import { markReadUpTo } from '../../lib/chatRead'
+import { loadVoicePrefs, saveVoicePrefs, speakText, stopSpeaking, unlockAudio } from '../../lib/voice'
 import {
   copyToClipboard,
   dayLabel,
@@ -19,6 +20,7 @@ import MessageBubble from './MessageBubble'
 import MessageSheet from './MessageSheet'
 import ConfirmDialog from './ConfirmDialog'
 import Composer from './Composer'
+import VoiceSettings from './VoiceSettings'
 import companionAvatar from '../../assets/companion-avatar.png'
 import './chat.css'
 
@@ -118,6 +120,9 @@ export default function ChatPage() {
   const [flashId, setFlashId] = useState(null)
   const [atBottom, setAtBottom] = useState(true)
   const [unseen, setUnseen] = useState(0)
+  const [voicePrefs, setVoicePrefs] = useState(loadVoicePrefs)
+  const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false)
+  const [speakingId, setSpeakingId] = useState(null)
 
   const scrollRef = useRef(null)
   const composerRef = useRef(null)
@@ -127,6 +132,8 @@ export default function ChatPage() {
   const scrollTickRef = useRef(0)
   const toastTimerRef = useRef(null)
   const forwardedQueryHandledRef = useRef(false)
+  const voicePrefsRef = useRef(voicePrefs)
+  const speakingIdRef = useRef(null)
   // Tells the scroll effect what to do after the next render:
   // 'bottom-instant' | 'bottom-smooth' | { restore } | null
   const scrollIntentRef = useRef(messages.length > 0 ? 'bottom-instant' : null)
@@ -142,6 +149,43 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), [])
+
+  // Stops any reading aloud when this screen closes.
+  useEffect(() => () => stopSpeaking(), [])
+
+  // ---- voice ---------------------------------------------------------------
+  function handleVoicePrefsChange(next) {
+    voicePrefsRef.current = next
+    setVoicePrefs(next)
+    saveVoicePrefs(next)
+  }
+
+  // Reads one message aloud. Tapping it again stops it.
+  const speakMessage = useCallback(
+    async (msg) => {
+      if (!msg?.content) return
+
+      if (speakingIdRef.current === msg.id) {
+        stopSpeaking()
+        speakingIdRef.current = null
+        setSpeakingId(null)
+        return
+      }
+
+      unlockAudio()
+      speakingIdRef.current = msg.id
+      setSpeakingId(msg.id)
+      try {
+        await speakText(msg.content, { natural: voicePrefsRef.current.natural, onNotice: showToast })
+      } finally {
+        if (speakingIdRef.current === msg.id) {
+          speakingIdRef.current = null
+          setSpeakingId(null)
+        }
+      }
+    },
+    [showToast]
+  )
 
   // ---- notifications (unchanged behaviour) ---------------------------------
   async function attemptPushRegistration(uid) {
@@ -408,7 +452,7 @@ export default function ChatPage() {
 
   // ---- sending -------------------------------------------------------------
   const sendMessage = useCallback(
-    async (rawText, reply = null) => {
+    async (rawText, reply = null, meta = {}) => {
       const text = rawText.trim()
       if (!text || sendingRef.current || !userId) return false
 
@@ -488,6 +532,8 @@ export default function ChatPage() {
 
         if (parsed?.message) {
           applyIncoming(parsed.message)
+          // Replies to a spoken message are read aloud; so is every reply if "Read replies aloud" is on.
+          if (meta.viaVoice || voicePrefsRef.current.readAloud) speakMessage(parsed.message)
         } else {
           scrollIntentRef.current = 'bottom-smooth'
           setMessages((prev) => [
@@ -518,13 +564,13 @@ export default function ChatPage() {
         setSending(false)
       }
     },
-    [userId, applyIncoming]
+    [userId, applyIncoming, speakMessage]
   )
 
   // Called by the typing box. Returns true if the message was accepted.
-  function submitFromComposer(text) {
+  function submitFromComposer(text, meta = {}) {
     if (sendingRef.current || !text.trim()) return false
-    sendMessage(text, replyTo)
+    sendMessage(text, replyTo, meta)
     setReplyTo(null)
     return true
   }
@@ -789,6 +835,15 @@ export default function ChatPage() {
                 >
                   {starredOnly ? 'Show all messages' : 'Starred messages'}
                 </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setVoiceSettingsOpen(true)
+                  }}
+                  className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
+                >
+                  Voice settings
+                </button>
                 <button onClick={handleToggleMute} className="block w-full px-4 py-2.5 text-left hover:bg-slate-50">
                   {muted ? 'Unmute sounds' : 'Mute sounds'}
                 </button>
@@ -962,6 +1017,8 @@ export default function ChatPage() {
                   onRetry={retrySend}
                   onJump={jumpTo}
                   onOpenImage={openImage}
+                  onSpeak={speakMessage}
+                  speaking={speakingId === m.id}
                 />
               </Fragment>
             ))}
@@ -1001,6 +1058,8 @@ export default function ChatPage() {
         busy={sending}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
+        voicePrefs={voicePrefs}
+        onVoiceError={showToast}
       />
 
       {toast && (
@@ -1020,6 +1079,19 @@ export default function ChatPage() {
           onShare={handleShare}
           onSaveImage={handleSaveImage}
           onDelete={askDelete}
+          speaking={speakingId === sheetMsg.id}
+          onSpeak={(m) => {
+            setSheetMsg(null)
+            speakMessage(m)
+          }}
+        />
+      )}
+
+      {voiceSettingsOpen && (
+        <VoiceSettings
+          prefs={voicePrefs}
+          onChange={handleVoicePrefsChange}
+          onClose={() => setVoiceSettingsOpen(false)}
         />
       )}
 

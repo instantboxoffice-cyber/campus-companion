@@ -11,7 +11,11 @@ const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-20b"
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash"
 const GEMINI_IMAGE_MODEL = Deno.env.get("GEMINI_IMAGE_MODEL") || "gemini-2.5-flash-image"
 // Which AI to try first. "groq,gemini" = Groq first, Gemini if Groq fails.
-const PROVIDER_ORDER = (Deno.env.get("AI_PROVIDER_ORDER") || "groq,gemini")
+const CLOUDFLARE_TEXT_MODEL = Deno.env.get("CLOUDFLARE_TEXT_MODEL") || "@cf/meta/llama-3.1-8b-instruct-fp8"
+const NATLAS_MODEL = Deno.env.get("NATLAS_MODEL") || "NCAIR1/N-ATLaS"
+// Order the AIs are tried in. A provider with no key / address is skipped instantly.
+// Available names: groq, gemini, cloudflare, natlas
+const PROVIDER_ORDER = (Deno.env.get("AI_PROVIDER_ORDER") || "groq,gemini,cloudflare,natlas")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean)
@@ -143,6 +147,76 @@ async function callGemini(systemPrompt, history) {
   return text
 }
 
+// ---------------------------------------------------------------------------
+// Text AI #3: Cloudflare Workers AI (same free account used for pictures).
+// Uses the shared free daily allowance, so it is a last-resort backup.
+// ---------------------------------------------------------------------------
+async function callCloudflareText(systemPrompt, history) {
+  const accountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")
+  const token = Deno.env.get("CLOUDFLARE_API_TOKEN")
+  if (!accountId || !token) throw new Error("CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN is not set")
+
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${CLOUDFLARE_TEXT_MODEL}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({
+        messages: [{ role: "system", content: systemPrompt }, ...history],
+        temperature: 0.1,
+        max_tokens: 700,
+      }),
+      signal: AbortSignal.timeout(25000),
+    },
+  )
+
+  if (!res.ok) {
+    throw new Error(`Cloudflare text ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  }
+
+  const data = await res.json()
+  const text = data?.result?.response ?? data?.result?.choices?.[0]?.message?.content
+  if (!text || typeof text !== "string") throw new Error("Cloudflare text returned no content")
+  return text
+}
+
+// ---------------------------------------------------------------------------
+// Text AI #4: N-ATLaS (Nigeria's Yoruba / Hausa / Igbo / Nigerian English model).
+// There is no free hosted N-ATLaS, so this stays switched off until you set
+// NATLAS_BASE_URL to a server that runs it with an OpenAI-style API
+// (for example "https://your-server.example.com/v1").
+// Licence: show "Powered by Awarri" and keep under 1,000 active users a month.
+// ---------------------------------------------------------------------------
+async function callNatlas(systemPrompt, history) {
+  const base = Deno.env.get("NATLAS_BASE_URL")
+  if (!base) throw new Error("NATLAS_BASE_URL is not set")
+  const key = Deno.env.get("NATLAS_API_KEY")
+
+  const res = await fetch(`${base.replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(key ? { "Authorization": `Bearer ${key}` } : {}),
+    },
+    body: JSON.stringify({
+      model: NATLAS_MODEL,
+      messages: [{ role: "system", content: systemPrompt }, ...history],
+      temperature: 0.1,
+      max_tokens: 700,
+    }),
+    signal: AbortSignal.timeout(25000),
+  })
+
+  if (!res.ok) {
+    throw new Error(`N-ATLaS ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  }
+
+  const data = await res.json()
+  const text = data?.choices?.[0]?.message?.content
+  if (!text) throw new Error("N-ATLaS returned no content")
+  return text
+}
+
 // Tries each AI in PROVIDER_ORDER. If one fails (rate limit, bad key, bad
 // JSON, timeout), it moves on to the next one instead of giving up.
 async function askModel(systemPrompt, history) {
@@ -153,6 +227,8 @@ async function askModel(systemPrompt, history) {
       let raw
       if (provider === "groq") raw = await callGroq(systemPrompt, history)
       else if (provider === "gemini") raw = await callGemini(systemPrompt, history)
+      else if (provider === "cloudflare") raw = await callCloudflareText(systemPrompt, history)
+      else if (provider === "natlas") raw = await callNatlas(systemPrompt, history)
       else continue
 
       const parsed = JSON.parse(normalizeModelJson(raw))
@@ -278,6 +354,8 @@ async function imagesMadeInLast24h(serviceClient, userId) {
 async function generateAndSaveReply({ history, userTimezone, userLocalTime, user, serviceClient }) {
   const systemPrompt = `You are the AI companion inside "Campus Companion," a friendly reminder app. You talk like a warm, casual friend — not a form or a robot. Keep replies short, natural, and conversational, the way a real friend texting on WhatsApp would.
 
+You are built for Nigerian users, most of them students. You understand Nigerian English, Nigerian Pidgin, and everyday Yoruba, Hausa and Igbo. Reply in the same language and style the person uses: if they write Pidgin, answer in easy Pidgin; if they write Yoruba, answer in Yoruba; if they mix languages, mirror them. You know Nigerian life well: naira (₦), campus life (lectures, CA, exams, hostel, NYSC, JAMB), local food, transport (okada, keke, danfo), NEPA and light, data bundles. Some messages are typed from speech, so they may have small spelling or word mistakes. Work out what the person meant and do not point the mistake out.
+
 You will receive the recent conversation history, ending with the user's latest message. Use that history to understand context — especially if you previously asked a clarifying question and the user's latest message is answering it. Combine the earlier request with the new detail rather than asking again, unless something is still genuinely missing.
 
 Classify the latest message (in light of the history) as one of:
@@ -298,6 +376,7 @@ Respond ONLY with valid JSON, no markdown, no explanation, in this exact shape:
 
 Rules:
 - If intent is "reminder": due_at must be resolvable — combine info across the conversation if needed. Reply with a warm, brief confirmation. Vary your phrasing naturally, don't always start with the same word.
+- If the person gives a day but only a part of the day (morning, afternoon, evening, night), choose a sensible time (08:00, 13:00, 18:00, 21:00) instead of asking.
 - If intent is "clarify": ask for exactly the one piece still missing (don't re-ask for something already given earlier in the history).
 - If intent is "image": you CAN make images. Put a detailed, vivid description in "image_prompt" (subject, style, colors, mood, composition), staying faithful to what the user asked, written in English. Do not put any text the user did not ask for inside the picture. "reply" is a short, friendly line that goes with the picture (for example "Here you go!" — say it as if the picture is arriving together with your message). If the request has no subject at all (for example just "draw something"), use intent "clarify" and ask what they would like. A request like "remind me to draw" is a reminder, not an image.
 - If intent is "chat": task/due_at/recurrence/image_prompt are null. Reply naturally like a friend would.
