@@ -55,6 +55,7 @@ export default function AlarmHost() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [needsTap, setNeedsTap] = useState(true)
+  const [silenced, setSilenced] = useState(false)
 
   const close = useCallback(() => {
     sounds.stopAlarm()
@@ -124,7 +125,8 @@ export default function AlarmHost() {
     if (!nextAlarm?.reminderId || !nextAlarm?.dueAt) return
     if (isAcked(nextAlarm.reminderId, nextAlarm.dueAt)) return
 
-    sounds.startAlarm()
+    // Only ring while the screen is on and the app is in front.
+    if (document.visibilityState === 'visible') sounds.startAlarm()
     if (navigator.vibrate) {
       navigator.vibrate([900, 180, 900, 180, 900])
     }
@@ -222,8 +224,31 @@ export default function AlarmHost() {
       }
     }
 
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        // keep existing wake lock logic if present
+      } else {
+        // Screen turned off (power button) or the app was left: go quiet.
+        sounds.stopAlarm()
+      }
+    }
+
+    const audioWatch = setInterval(() => {
+      const ringing = sounds.alarmIsRinging()
+      setSilenced(!ringing)
+      setNeedsTap(ringing && !sounds.alarmIsAudible())
+    }, 500)
+
+    document.addEventListener('visibilitychange', onVisible)
     navigator.serviceWorker?.addEventListener?.('message', onSwMessage)
-    return () => navigator.serviceWorker?.removeEventListener?.('message', onSwMessage)
+
+    return () => {
+      clearInterval(audioWatch)
+      setNeedsTap(false)
+      setSilenced(false)
+      document.removeEventListener('visibilitychange', onVisible)
+      navigator.serviceWorker?.removeEventListener?.('message', onSwMessage)
+    }
   }, [alarm, close])
 
   if (!alarm) return null
@@ -256,7 +281,11 @@ export default function AlarmHost() {
 
         <p className="mt-10 max-w-xs break-words text-2xl font-medium leading-snug">{alarm.task}</p>
 
-        {needsTap && <p className="mt-6 text-xs text-white/50">Tap anywhere for sound</p>}
+        {silenced ? (
+          <p className="mt-6 text-xs text-white/50">Silenced</p>
+        ) : (
+          needsTap && <p className="mt-6 text-xs text-white/50">Tap anywhere for sound</p>
+        )}
         {error && <p className="mt-6 text-sm text-red-300">{error}</p>}
       </div>
 

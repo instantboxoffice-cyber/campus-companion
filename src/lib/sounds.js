@@ -104,12 +104,17 @@ function alarmIsAudible() {
   return Boolean(alarmInterval)
 }
 
+function alarmIsRinging() {
+  return alarmInterval !== null
+}
+
 export const sounds = {
   sent,
   received,
   startAlarm,
   stopAlarm,
   alarmIsAudible,
+  alarmIsRinging,
   isMuted,
   setMuted,
   toggleMuted,
