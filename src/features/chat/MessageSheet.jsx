@@ -41,7 +41,8 @@ export default function MessageSheet({
     return () => window.removeEventListener('keydown', handleKey)
   }, [onClose])
 
-  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+  const isVoiceNote = !!(msg.audio_path || msg._localAudioUrl)
+  const canShare = !isVoiceNote && typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">

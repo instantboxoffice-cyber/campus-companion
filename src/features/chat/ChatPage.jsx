@@ -4,7 +4,18 @@ import { supabase } from '../../lib/supabaseClient'
 import { registerPushNotifications } from '../../lib/pushNotifications'
 import { sounds } from '../../lib/sounds'
 import { markReadUpTo } from '../../lib/chatRead'
-import { loadVoicePrefs, saveVoicePrefs, speakText, stopSpeaking, unlockAudio } from '../../lib/voice'
+import {
+  VOICE_BUCKET,
+  loadVoicePrefs,
+  prepareAudio,
+  removeVoiceNote,
+  saveVoicePrefs,
+  speakText,
+  stopSpeaking,
+  transcribePrepared,
+  unlockAudio,
+  uploadVoiceNote,
+} from '../../lib/voice'
 import {
   copyToClipboard,
   dayLabel,
@@ -82,7 +93,12 @@ function writeCache(userId, messages) {
 // Swaps a "sending…" placeholder for the real saved message.
 function settleTemp(list, tempId, real) {
   if (list.some((m) => m.id === real.id)) return list.filter((m) => m._tempId !== tempId)
-  return list.map((m) => (m._tempId === tempId ? { ...real, _key: tempId } : m))
+  // A voice note keeps playing from the copy on this phone (no flicker, no re-download).
+  return list.map((m) =>
+    m._tempId === tempId
+      ? { ...real, _key: tempId, ...(m._localAudioUrl ? { _localAudioUrl: m._localAudioUrl } : {}) }
+      : m
+  )
 }
 
 export default function ChatPage() {
@@ -354,11 +370,19 @@ export default function ChatPage() {
         if (prev.some((m) => m.id === row.id)) return prev
         if (!fromCompanion) {
           const idx = prev.findIndex(
-            (m) => m._tempId && m.status === 'sending' && m.content === row.content
+            (m) =>
+              m._tempId &&
+              m.status === 'sending' &&
+              m.content === row.content &&
+              !!m._localAudioUrl === !!row.audio_path
           )
           if (idx >= 0) {
             const next = [...prev]
-            next[idx] = { ...row, _key: prev[idx]._key }
+            next[idx] = {
+              ...row,
+              _key: prev[idx]._key,
+              ...(prev[idx]._localAudioUrl ? { _localAudioUrl: prev[idx]._localAudioUrl } : {}),
+            }
             return next
           }
         }
@@ -451,10 +475,15 @@ export default function ChatPage() {
   }, [messages, atBottom])
 
   // ---- sending -------------------------------------------------------------
+  // Sends either a typed message, or (when meta.voice is given) a VOICE NOTE.
+  // A voice note appears as an audio bubble straight away. Behind the scenes
+  // it is saved to Storage and turned into text, so the AI can understand it.
+  // That text is never shown - the person only ever sees their voice note.
   const sendMessage = useCallback(
     async (rawText, reply = null, meta = {}) => {
-      const text = rawText.trim()
-      if (!text || sendingRef.current || !userId) return false
+      const voice = meta.voice || null
+      const text = voice ? '' : rawText.trim()
+      if ((!voice && !text) || sendingRef.current || !userId) return false
 
       sendingRef.current = true
       setSending(true)
@@ -468,6 +497,7 @@ export default function ChatPage() {
             reply_preview: messagePreview(reply),
           }
         : {}
+      const seconds = voice ? Math.max(1, Math.round(voice.durationMs / 1000)) : null
 
       // Show the message on screen straight away - no waiting for the server.
       scrollIntentRef.current = 'bottom-smooth'
@@ -482,20 +512,71 @@ export default function ChatPage() {
           sender: 'user',
           content: text,
           created_at: new Date().toISOString(),
+          ...(voice ? { _localAudioUrl: URL.createObjectURL(voice.blob), audio_seconds: seconds } : {}),
           ...replyFields,
         },
       ])
 
+      // A voice note that cannot be sent is removed (nothing half-sent is left behind).
+      const dropTemp = (message) => {
+        setMessages((prev) => prev.filter((m) => m._tempId !== tempId))
+        if (message) showToast(message)
+      }
+
+      let audioPath = null
+
       try {
+        let transcript = ''
+
+        if (voice) {
+          const prepared = await prepareAudio(voice.blob)
+          if (prepared.silent) {
+            dropTemp("I couldn't hear anything. Check your mic and try again.")
+            return false
+          }
+
+          // Save the voice note and read it as text at the same time (faster).
+          const [stt, saved] = await Promise.allSettled([
+            transcribePrepared(prepared.audio, voicePrefsRef.current.language),
+            uploadVoiceNote(prepared.audio, userId),
+          ])
+          if (saved.status === 'fulfilled') audioPath = saved.value
+
+          if (stt.status !== 'fulfilled' || saved.status !== 'fulfilled' || !stt.value.text) {
+            removeVoiceNote(audioPath)
+            audioPath = null
+            const failure = stt.status === 'rejected' ? stt.reason : saved.status === 'rejected' ? saved.reason : null
+            dropTemp(
+              failure?.message ||
+                (stt.status === 'fulfilled' && !stt.value.text
+                  ? "I couldn't make out any words. Try again."
+                  : "Couldn't send your voice note. Please try again.")
+            )
+            return false
+          }
+          transcript = stt.value.text
+        }
+
         const { data: userMsg, error: userMsgError } = await supabase
           .from('messages')
-          .insert({ user_id: userId, sender: 'user', content: text, ...replyFields })
+          .insert({
+            user_id: userId,
+            sender: 'user',
+            content: text,
+            ...(voice ? { audio_path: audioPath, audio_seconds: seconds, transcript } : {}),
+            ...replyFields,
+          })
           .select()
           .single()
 
         if (userMsgError) {
           console.error(userMsgError)
-          setMessages((prev) => prev.map((m) => (m._tempId === tempId ? { ...m, status: 'failed' } : m)))
+          if (voice) {
+            removeVoiceNote(audioPath)
+            dropTemp("Couldn't send your voice note. Please try again.")
+          } else {
+            setMessages((prev) => prev.map((m) => (m._tempId === tempId ? { ...m, status: 'failed' } : m)))
+          }
           return false
         }
 
@@ -504,6 +585,7 @@ export default function ChatPage() {
 
         // The AI gets the last 10 messages. A reply is passed along with the
         // message it points to, so the AI understands what "this" means.
+        // A voice note is given to the AI as its (hidden) written text.
         const history = [
           ...messagesRef.current.filter(
             (m) => m.id !== tempId && m.id !== userMsg.id && !m._tempId && !m._local
@@ -511,12 +593,15 @@ export default function ChatPage() {
           userMsg,
         ]
           .slice(-10)
-          .map((m) => ({
-            role: m.sender === 'user' ? 'user' : 'assistant',
-            content: m.reply_preview
-              ? `[Replying to ${m.reply_sender === 'user' ? 'their own message' : 'your message'}: "${m.reply_preview}"]\n${m.content}`
-              : m.content,
-          }))
+          .map((m) => {
+            const body = m.content || m.transcript || ''
+            return {
+              role: m.sender === 'user' ? 'user' : 'assistant',
+              content: m.reply_preview
+                ? `[Replying to ${m.reply_sender === 'user' ? 'their own message' : 'your message'}: "${m.reply_preview}"]\n${body}`
+                : body,
+            }
+          })
 
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
         const localTime = new Date().toLocaleString('sv-SE', { timeZone: timezone }).replace(' ', 'T')
@@ -533,7 +618,7 @@ export default function ChatPage() {
         if (parsed?.message) {
           applyIncoming(parsed.message)
           // Replies to a spoken message are read aloud; so is every reply if "Read replies aloud" is on.
-          if (meta.viaVoice || voicePrefsRef.current.readAloud) speakMessage(parsed.message)
+          if (voice || meta.viaVoice || voicePrefsRef.current.readAloud) speakMessage(parsed.message)
         } else {
           scrollIntentRef.current = 'bottom-smooth'
           setMessages((prev) => [
@@ -564,7 +649,7 @@ export default function ChatPage() {
         setSending(false)
       }
     },
-    [userId, applyIncoming, speakMessage]
+    [userId, applyIncoming, speakMessage, showToast]
   )
 
   // Called by the typing box. Returns true if the message was accepted.
@@ -575,7 +660,16 @@ export default function ChatPage() {
     return true
   }
 
+  // Called by the mic. Returns true if the voice note was accepted.
+  function submitVoiceFromComposer(voice) {
+    if (sendingRef.current) return false
+    sendMessage('', replyTo, { voice })
+    setReplyTo(null)
+    return true
+  }
+
   function retrySend(msg) {
+    if (!msg.content) return // voice notes that fail are removed, never retried
     setMessages((prev) => prev.filter((m) => m.id !== msg.id))
     const reply = msg.reply_preview
       ? { id: msg.reply_to_id, sender: msg.reply_sender, content: msg.reply_preview }
@@ -703,6 +797,7 @@ export default function ChatPage() {
 
     const path = storagePathFromUrl(msg.image_url)
     if (path) supabase.storage.from('chat-images').remove([path]).catch(() => {})
+    removeVoiceNote(msg.audio_path)
   }
 
   async function confirmClearChat() {
@@ -725,6 +820,16 @@ export default function ChatPage() {
       const { data: files } = await supabase.storage.from('chat-images').list(userId, { limit: 1000 })
       if (files?.length) {
         await supabase.storage.from('chat-images').remove(files.map((f) => `${userId}/${f.name}`))
+      }
+    } catch {
+      // Not critical.
+    }
+
+    // ...and the saved voice notes (best effort).
+    try {
+      const { data: notes } = await supabase.storage.from(VOICE_BUCKET).list(userId, { limit: 1000 })
+      if (notes?.length) {
+        await supabase.storage.from(VOICE_BUCKET).remove(notes.map((f) => `${userId}/${f.name}`))
       }
     } catch {
       // Not critical.
@@ -759,7 +864,7 @@ export default function ChatPage() {
     let list = messages
     if (starredOnly) list = list.filter((m) => m.starred)
     const q = query.trim().toLowerCase()
-    if (q) list = list.filter((m) => (m.content || '').toLowerCase().includes(q))
+    if (q) list = list.filter((m) => (m.content || m.transcript || '').toLowerCase().includes(q))
     return list
   }, [messages, starredOnly, query])
 
@@ -1055,6 +1160,7 @@ export default function ChatPage() {
       <Composer
         ref={composerRef}
         onSend={submitFromComposer}
+        onSendVoice={submitVoiceFromComposer}
         busy={sending}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}

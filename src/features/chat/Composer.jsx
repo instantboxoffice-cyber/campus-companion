@@ -19,7 +19,7 @@ function formatSeconds(total) {
 // The typing box lives in its own component on purpose: every keystroke
 // only re-renders THIS small box, not the whole message list. That is what
 // keeps typing instant even in a long chat.
-export default function Composer({ ref, onSend, busy, replyTo, onCancelReply, voicePrefs, onVoiceError }) {
+export default function Composer({ ref, onSend, onSendVoice, busy, replyTo, onCancelReply, voicePrefs, onVoiceError }) {
   const [value, setValue] = useState('')
   const [showFormat, setShowFormat] = useState(false)
   const [mode, setMode] = useState('idle') // 'idle' | 'recording' | 'transcribing'
@@ -28,11 +28,11 @@ export default function Composer({ ref, onSend, busy, replyTo, onCancelReply, vo
   const recRef = useRef(null)
   const timerRef = useRef(null)
   const voiceDraftRef = useRef(false) // true while the text in the box came from speaking
-  const latest = useRef({ voicePrefs, busy, onSend, onVoiceError })
+  const latest = useRef({ voicePrefs, busy, onSend, onSendVoice, onVoiceError })
 
   // The recording timer outlives a render, so it reads the newest values from here.
   useEffect(() => {
-    latest.current = { voicePrefs, busy, onSend, onVoiceError }
+    latest.current = { voicePrefs, busy, onSend, onSendVoice, onVoiceError }
   })
 
   useImperativeHandle(ref, () => ({ focus: () => taRef.current?.focus() }), [])
@@ -80,16 +80,25 @@ export default function Composer({ ref, onSend, busy, replyTo, onCancelReply, vo
       return
     }
 
+    // DEFAULT: send the recording as a real voice note, straight away.
+    // The chat screen shows it as a voice bubble and handles the rest.
+    if (latest.current.voicePrefs.autoSend) {
+      const accepted = latest.current.onSendVoice?.({ blob, durationMs })
+      setMode('idle')
+      if (!accepted) {
+        latest.current.onVoiceError('Companion is still replying. Please record again in a moment.')
+      }
+      return
+    }
+
+    // Auto-send is switched off: put the spoken words in the box as text.
     try {
       const { text, silent } = await transcribeAudio(blob, latest.current.voicePrefs.language)
-      const now = latest.current
 
       if (!text) {
-        now.onVoiceError(
+        latest.current.onVoiceError(
           silent ? "I couldn't hear anything. Check your mic and try again." : "I couldn't make out any words. Try again."
         )
-      } else if (now.voicePrefs.autoSend && !now.busy && now.onSend(text, { viaVoice: true })) {
-        // Sent straight away.
       } else {
         voiceDraftRef.current = true
         setValue((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text))
@@ -103,6 +112,10 @@ export default function Composer({ ref, onSend, busy, replyTo, onCancelReply, vo
   }
 
   async function startVoice() {
+    if (latest.current.busy) {
+      latest.current.onVoiceError('Companion is still replying. Try again in a moment.')
+      return
+    }
     unlockAudio() // lets the phone play the spoken reply later
     try {
       recRef.current = await startRecording()
@@ -237,7 +250,9 @@ export default function Composer({ ref, onSend, busy, replyTo, onCancelReply, vo
               ) : (
                 <>
                   <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-primary" />
-                  <span className="text-sm text-slate-500">Turning your voice into text…</span>
+                  <span className="text-sm text-slate-500">
+                    {voicePrefs.autoSend ? 'Sending voice note…' : 'Turning your voice into text…'}
+                  </span>
                 </>
               )}
             </div>

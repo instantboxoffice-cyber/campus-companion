@@ -50,6 +50,7 @@ export function plainPreview(text, max = 100) {
 export function messagePreview(msg) {
   const base = plainPreview(msg?.content)
   if (msg?.image_url) return base ? `📷 ${base}` : '📷 Picture'
+  if (msg?.audio_path || msg?._localAudioUrl) return '🎤 Voice message'
   return base
 }
 

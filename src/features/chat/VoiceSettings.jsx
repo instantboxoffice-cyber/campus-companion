@@ -73,8 +73,8 @@ export default function VoiceSettings({ prefs, onChange, onClose }) {
 
         <div className="mt-3 divide-y divide-slate-100">
           <Toggle
-            label="Send automatically after I speak"
-            hint="Off: your words appear in the box first, so you can fix them before sending."
+            label="Send voice notes automatically"
+            hint="On: your voice note is sent as a voice note the moment you stop recording. Off: your words appear as text in the box first, so you can fix them before sending."
             checked={prefs.autoSend}
             onChange={(v) => set({ autoSend: v })}
           />

@@ -2,6 +2,7 @@ import { memo, useRef, useState } from 'react'
 import FormattedText from '../../lib/formatText'
 import { formatBubbleTime } from '../../lib/messageUtils'
 import { CheckIcon } from '../../components/Icons'
+import VoiceNoteBubble from './VoiceNoteBubble'
 import { ChevronDownIcon, ClockIcon, ReplyIcon, SpeakerIcon, StarIcon, StopIcon } from '../../components/ChatIcons'
 import companionAvatar from '../../assets/companion-avatar.png'
 
@@ -118,6 +119,17 @@ function MessageBubble({
     </button>
   ) : null
 
+  const hasVoice = !!(msg._localAudioUrl || msg.audio_path)
+  const voice = hasVoice ? (
+    <VoiceNoteBubble
+      localUrl={msg._localAudioUrl}
+      path={msg.audio_path}
+      seconds={msg.audio_seconds}
+      seed={msg._key || msg.id}
+      onPrimary={isUser}
+    />
+  ) : null
+
   const reaction = msg.reaction ? (
     <button
       type="button"
@@ -201,6 +213,7 @@ function MessageBubble({
               >
                 {quote}
                 {image}
+                {voice}
                 {msg.content && <FormattedText text={msg.content} onPrimary />}
               </div>
               {reaction}

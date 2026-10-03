@@ -15,11 +15,18 @@ export const VOICE_LANGUAGES = [
   { value: 'ig', label: 'Igbo' },
 ]
 
-const DEFAULT_PREFS = { language: 'auto', autoSend: false, readAloud: false, natural: false }
+// Voice notes are now sent automatically (as real voice notes) by default.
+const DEFAULT_PREFS = { language: 'auto', autoSend: true, readAloud: false, natural: false }
 
 export function loadVoicePrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')
+    // One-time switch: people who saved settings before this update had
+    // auto-send OFF stored. Turn it ON once; they can still switch it off.
+    if (!raw.autoSendV2) {
+      raw.autoSend = true
+      raw.autoSendV2 = true
+    }
     return { ...DEFAULT_PREFS, ...raw }
   } catch {
     return { ...DEFAULT_PREFS }
@@ -163,21 +170,30 @@ async function toWav16k(blob) {
   }
 }
 
-export async function transcribeAudio(blob, language) {
-  const form = new FormData()
-  let silent = false
+function audioExtension(type = '') {
+  if (type.includes('wav')) return 'wav'
+  if (type.includes('mp4')) return 'm4a'
+  if (type.includes('ogg')) return 'ogg'
+  return 'webm'
+}
 
+// Step 1: get the recording ready. The result is ONE file used for both
+// the voice note (saved + played back) and the speech-to-text.
+// Plays on every phone because it is a plain WAV whenever conversion works.
+export async function prepareAudio(blob) {
   try {
     const { wav, peak } = await toWav16k(blob)
-    if (peak < 0.015) silent = true
-    form.append('audio', wav, 'voice.wav')
+    return { audio: wav, silent: peak < 0.015 }
   } catch {
-    // Could not convert on this device - send the original recording as it is.
-    const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
-    form.append('audio', blob, `voice.${ext}`)
+    // Could not convert on this device - keep the original recording as it is.
+    return { audio: blob, silent: false }
   }
+}
 
-  if (silent) return { text: '', silent: true }
+// Step 2: turn the prepared audio into text (the AI needs text to understand).
+export async function transcribePrepared(audio, language) {
+  const form = new FormData()
+  form.append('audio', audio, `voice.${audioExtension(audio.type)}`)
   form.append('language', language || 'auto')
 
   const { data, error } = await supabase.functions.invoke('transcribe', { body: form })
@@ -185,6 +201,55 @@ export async function transcribeAudio(blob, language) {
     throw new VoiceError("I couldn't understand that recording. Please try again.")
   }
   return { text: data.text.trim(), silent: false }
+}
+
+// Kept for the "type the words into the box" mode (auto-send switched off).
+export async function transcribeAudio(blob, language) {
+  const { audio, silent } = await prepareAudio(blob)
+  if (silent) return { text: '', silent: true }
+  return transcribePrepared(audio, language)
+}
+
+// ---- voice notes (saved audio) ---------------------------------------------
+// Private folder in Supabase Storage. Only the owner can read or write it.
+export const VOICE_BUCKET = 'chat-audio'
+
+// Saves the voice note and returns its path, e.g. "USER_ID/abc123.wav".
+export async function uploadVoiceNote(audio, userId) {
+  const path = `${userId}/${crypto.randomUUID()}.${audioExtension(audio.type)}`
+  const { error } = await supabase.storage.from(VOICE_BUCKET).upload(path, audio, {
+    contentType: (audio.type || 'audio/wav').split(';')[0],
+    cacheControl: '31536000',
+  })
+  if (error) {
+    console.error('Voice note upload failed', error)
+    throw new VoiceError("Couldn't send your voice note. Check your connection and try again.")
+  }
+  return path
+}
+
+export function removeVoiceNote(path) {
+  if (!path) return
+  supabase.storage.from(VOICE_BUCKET).remove([path]).catch(() => {})
+}
+
+// Private files need a temporary link to play. Links are remembered so each
+// voice note asks only once.
+const linkCache = new Map()
+const LINK_LIFETIME_S = 6 * 60 * 60
+
+export async function getVoiceNoteUrl(path) {
+  const hit = linkCache.get(path)
+  if (hit && hit.expires > Date.now()) return hit.url
+
+  const { data, error } = await supabase.storage.from(VOICE_BUCKET).createSignedUrl(path, LINK_LIFETIME_S)
+  if (error || !data?.signedUrl) throw new VoiceError("Couldn't load this voice note.")
+  linkCache.set(path, { url: data.signedUrl, expires: Date.now() + (LINK_LIFETIME_S - 600) * 1000 })
+  return data.signedUrl
+}
+
+export function forgetVoiceNoteUrl(path) {
+  linkCache.delete(path)
 }
 
 // ---- reading replies aloud -------------------------------------------------
