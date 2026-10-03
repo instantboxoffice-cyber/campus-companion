@@ -33,3 +33,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/parse-reminder/deno.json"
 entrypoint = "./functions/speak/index.ts"
+
+[functions.refresh-shorts]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/refresh-shorts/index.ts"
