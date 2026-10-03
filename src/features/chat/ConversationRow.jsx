@@ -1,4 +1,5 @@
 import Avatar from '../../components/Avatar'
+import MessageTicks from '../../components/MessageTicks'
 
 function formatTimestamp(iso) {
   if (!iso) return ''
@@ -7,6 +8,14 @@ function formatTimestamp(iso) {
     return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   }
   return date.toLocaleDateString([], { day: 'numeric', month: 'short' })
+}
+
+function previewLine(convo) {
+  const text = convo.last_content ?? ''
+  if (convo.last_type === 'audio') return '🎤 Voice message'
+  if (convo.last_type === 'image') return text ? `📷 ${text}` : '📷 Photo'
+  if (convo.last_type === 'file') return `📄 ${text || 'Document'}`
+  return text
 }
 
 export default function ConversationRow({ convo, onOpen }) {
@@ -28,7 +37,12 @@ export default function ConversationRow({ convo, onOpen }) {
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p className={`truncate text-sm ${unread ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
-            {convo.lastFromMe ? 'You: ' : ''}{convo.last_content}
+            {convo.lastFromMe && (
+              <span className="mr-1 inline-flex align-middle text-slate-400">
+                <MessageTicks deliveredAt={convo.last_delivered_at} readAt={convo.last_read_at} />
+              </span>
+            )}
+            {convo.lastFromMe ? 'You: ' : ''}{previewLine(convo)}
           </p>
           {unread && (
             <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white">

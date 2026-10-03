@@ -40,7 +40,15 @@ function PauseIcon({ className = 'h-4 w-4' }) {
 
 // localUrl: the recording still on this phone (shows instantly while it uploads).
 // path: where the saved voice note lives in Supabase Storage.
-function VoiceNoteBubble({ localUrl, path, seconds, seed, onPrimary = true }) {
+function VoiceNoteBubble({
+  localUrl,
+  path,
+  seconds,
+  seed,
+  onPrimary = true,
+  getUrl = getVoiceNoteUrl,
+  forgetUrl = forgetVoiceNoteUrl,
+}) {
   const audioRef = useRef(null)
   const [url, setUrl] = useState(localUrl || null)
   const [playing, setPlaying] = useState(false)
@@ -60,7 +68,7 @@ function VoiceNoteBubble({ localUrl, path, seconds, seed, onPrimary = true }) {
     if (!path) return undefined
 
     let cancelled = false
-    getVoiceNoteUrl(path)
+    getUrl(path)
       .then((u) => {
         if (!cancelled) {
           setUrl(u)
@@ -73,7 +81,7 @@ function VoiceNoteBubble({ localUrl, path, seconds, seed, onPrimary = true }) {
     return () => {
       cancelled = true
     }
-  }, [localUrl, path])
+  }, [localUrl, path, getUrl])
 
   // A new link means a new audio file: drop the old player.
   useEffect(() => {
@@ -116,14 +124,14 @@ function VoiceNoteBubble({ localUrl, path, seconds, seed, onPrimary = true }) {
       setPlaying(false)
       audioRef.current = null
       if (path && !localUrl) {
-        forgetVoiceNoteUrl(path)
-        getVoiceNoteUrl(path)
+        forgetUrl(path)
+        getUrl(path)
           .then(setUrl)
           .catch(() => setLoadFailed(true))
       }
     })
     return audio
-  }, [url, total, path, localUrl])
+  }, [url, total, path, localUrl, getUrl, forgetUrl])
 
   function toggle() {
     if (!url) return

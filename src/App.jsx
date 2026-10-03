@@ -10,6 +10,7 @@ import FriendsPage from './features/friends/FriendsPage'
 import UsernameGate from './features/friends/UsernameGate'
 import ProtectedRoute from './routes/ProtectedRoute'
 import InstallPrompt from './components/InstallPrompt'
+import DeliveryTracker from './features/chat/DeliveryTracker'
 import { sounds } from './lib/sounds'
 
    sounds.attachGlobalClickSound()
@@ -71,6 +72,7 @@ function App() {
       </Routes>
       <InstallPrompt />
       <UsernameGate />
+      <DeliveryTracker />
     </BrowserRouter>
   )
 }

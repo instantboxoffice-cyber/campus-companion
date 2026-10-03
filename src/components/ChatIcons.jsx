@@ -109,3 +109,50 @@ export function SpeakerIcon({ className = 'h-5 w-5' }) {
     </svg>
   )
 }
+
+export function PaperclipIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.9-8.9a3.7 3.7 0 0 1 5.2 5.2l-8.9 8.9a1.8 1.8 0 0 1-2.6-2.6l8.2-8.2" />
+    </svg>
+  )
+}
+
+export function ImageIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  )
+}
+
+export function FileIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  )
+}
+
+export function CameraOutlineIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  )
+}
+
+export function ArrowDownIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg {...base} className={className}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <polyline points="19 12 12 19 5 12" />
+    </svg>
+  )
+}
