@@ -52,14 +52,75 @@ function markAcked(reminder) {
 
 export default function AlarmHost() {
   const [alarm, setAlarm] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [needsTap, setNeedsTap] = useState(true)
 
-  const stopAlarm = useCallback(() => {
+  const close = useCallback(() => {
     sounds.stopAlarm()
     if (alarm) markAcked(alarm)
     setAlarm(null)
+    setBusy(false)
+    setError('')
   }, [alarm])
 
-  const triggerAlarm = useCallback((nextAlarm) => {
+  const snooze = useCallback(async () => {
+    if (!alarm?.reminderId) return
+
+    setBusy(true)
+    setError('')
+
+    const snoozedAt = new Date(Date.now() + SNOOZE_MINUTES * 60 * 1000).toISOString()
+
+    if (alarm.recurring) {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData?.user?.id
+      if (!userId) {
+        setBusy(false)
+        return
+      }
+
+      const { error: insertError } = await supabase.from('reminders').insert({
+        user_id: userId,
+        task: alarm.task,
+        due_at: snoozedAt,
+        recurrence: alarm.recurring,
+        status: 'pending',
+      })
+
+      if (!insertError) close()
+      else setError(insertError.message)
+      setBusy(false)
+      return
+    }
+
+    const { error: updateError } = await supabase
+      .from('reminders')
+      .update({ due_at: snoozedAt, status: 'pending' })
+      .eq('id', alarm.reminderId)
+
+    if (!updateError) close()
+    else setError(updateError.message)
+    setBusy(false)
+  }, [alarm, close])
+
+  const markDone = useCallback(async () => {
+    if (!alarm?.reminderId) return
+
+    setBusy(true)
+    setError('')
+
+    const { error: updateError } = await supabase
+      .from('reminders')
+      .update({ status: 'done' })
+      .eq('id', alarm.reminderId)
+
+    if (!updateError) close()
+    else setError(updateError.message)
+    setBusy(false)
+  }, [alarm, close])
+
+  const trigger = useCallback((nextAlarm) => {
     if (!nextAlarm?.reminderId || !nextAlarm?.dueAt) return
     if (isAcked(nextAlarm.reminderId, nextAlarm.dueAt)) return
 
@@ -68,12 +129,14 @@ export default function AlarmHost() {
       navigator.vibrate([900, 180, 900, 180, 900])
     }
     setAlarm(nextAlarm)
+    setNeedsTap(true)
+    setError('')
   }, [])
 
   useEffect(() => {
     const initialAlarm = parseAlarmFromUrl()
     if (initialAlarm) {
-      triggerAlarm(initialAlarm)
+      trigger(initialAlarm)
     }
 
     const handleMessage = (event) => {
@@ -81,7 +144,7 @@ export default function AlarmHost() {
       if (!payload || payload.type !== 'REMINDER_ALARM') return
 
       const nextAlarm = payload.data || payload
-      triggerAlarm({
+      trigger({
         reminderId: nextAlarm.reminderId ?? nextAlarm.id,
         task: nextAlarm.task ?? 'Reminder',
         dueAt: nextAlarm.dueAt ?? nextAlarm.due_at ?? new Date().toISOString(),
@@ -94,20 +157,20 @@ export default function AlarmHost() {
     return () => {
       navigator.serviceWorker?.removeEventListener?.('message', handleMessage)
     }
-  }, [triggerAlarm])
+  }, [trigger])
 
   useEffect(() => {
     if (!alarm) return undefined
 
     const handleKey = (event) => {
       if (event.key === 'Escape') {
-        stopAlarm()
+        close()
       }
     }
 
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [alarm, stopAlarm])
+  }, [alarm, close])
 
   useEffect(() => {
     let cancelled = false
@@ -116,19 +179,19 @@ export default function AlarmHost() {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData?.user?.id || cancelled) return
 
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('reminders')
         .select('*')
         .eq('user_id', userData.user.id)
         .lte('due_at', new Date().toISOString())
         .in('status', ['pending', 'sent'])
 
-      if (error || !data) return
+      if (fetchError || !data) return
 
       const nextDue = data.find((item) => !isAcked(item.id, item.due_at))
       if (!nextDue) return
 
-      triggerAlarm({
+      trigger({
         reminderId: nextDue.id,
         task: nextDue.task,
         dueAt: nextDue.due_at,
@@ -143,97 +206,76 @@ export default function AlarmHost() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [triggerAlarm])
+  }, [trigger])
 
-  async function handleDone() {
-    if (!alarm?.reminderId) return
+  useEffect(() => {
+    if (!alarm) return
 
-    const { error } = await supabase
-      .from('reminders')
-      .update({ status: 'done' })
-      .eq('id', alarm.reminderId)
-
-    if (!error) {
-      stopAlarm()
-    }
-  }
-
-  async function handleSnooze() {
-    if (!alarm?.reminderId) return
-
-    const snoozedAt = new Date(Date.now() + SNOOZE_MINUTES * 60 * 1000).toISOString()
-
-    if (alarm.recurring) {
-      const { data: userData } = await supabase.auth.getUser()
-      const userId = userData?.user?.id
-      if (!userId) return
-
-      const { error } = await supabase.from('reminders').insert({
-        user_id: userId,
-        task: alarm.task,
-        due_at: snoozedAt,
-        recurrence: alarm.recurring,
-        status: 'pending',
-      })
-
-      if (!error) stopAlarm()
-      return
+    const onSwMessage = (event) => {
+      if (event.data?.type === 'REMINDER_ACK') {
+        const reminder = event.data.reminder
+        const key = reminder?.id && reminder?.due_at ? `${reminder.id}|${reminder.due_at}` : null
+        if (key && alarm?.reminderId === reminder.id) {
+          markAcked({ reminderId: reminder.id, dueAt: reminder.due_at })
+          close()
+        }
+      }
     }
 
-    const { error } = await supabase
-      .from('reminders')
-      .update({ due_at: snoozedAt, status: 'pending' })
-      .eq('id', alarm.reminderId)
-
-    if (!error) stopAlarm()
-  }
+    navigator.serviceWorker?.addEventListener?.('message', onSwMessage)
+    return () => navigator.serviceWorker?.removeEventListener?.('message', onSwMessage)
+  }, [alarm, close])
 
   if (!alarm) return null
 
+  const parsed = alarm.dueAt ? new Date(alarm.dueAt) : null
+  const shown = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date()
+  const timeLabel = shown.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-4 text-white">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-300">Reminder</p>
-        <h2 className="mt-3 text-3xl font-bold leading-tight">{alarm.task}</h2>
-        <p className="mt-2 text-sm text-slate-300">
-          {new Date(alarm.dueAt).toLocaleString()}
-        </p>
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="Reminder alarm"
+      className="fixed inset-0 z-[9999] flex flex-col bg-[#0B1020] px-8 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-[calc(env(safe-area-inset-top)+3rem)] text-white"
+    >
+      <style>{`@keyframes alarm-breathe{0%,100%{transform:scale(1);opacity:.4}50%{transform:scale(1.15);opacity:0}}`}</style>
 
-        <div className="mt-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3 text-center text-sm text-amber-100">
-          Tap anywhere to turn the sound on.
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
+        {alarm.test && (
+          <p className="mb-6 text-xs uppercase tracking-[0.3em] text-white/40">Test</p>
+        )}
+
+        <div className="relative flex h-56 w-56 items-center justify-center">
+          <span
+            className="absolute inset-0 rounded-full border border-white/40"
+            style={{ animation: 'alarm-breathe 2.4s ease-in-out infinite' }}
+          />
+          <span className="text-6xl font-light tabular-nums tracking-tight">{timeLabel}</span>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={handleDone}
-            className="rounded-xl bg-emerald-500 px-3 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400"
-          >
-            Done
-          </button>
-          <button
-            type="button"
-            onClick={handleSnooze}
-            className="rounded-xl bg-amber-500 px-3 py-3 text-sm font-semibold text-white transition hover:bg-amber-400"
-          >
-            Snooze 10 min
-          </button>
-          <button
-            type="button"
-            onClick={stopAlarm}
-            className="rounded-xl bg-slate-700 px-3 py-3 text-sm font-semibold text-white transition hover:bg-slate-600"
-          >
-            Stop alarm
-          </button>
-        </div>
+        <p className="mt-10 max-w-xs break-words text-2xl font-medium leading-snug">{alarm.task}</p>
 
+        {needsTap && <p className="mt-6 text-xs text-white/50">Tap anywhere for sound</p>}
+        {error && <p className="mt-6 text-sm text-red-300">{error}</p>}
+      </div>
+
+      <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
         <button
-          type="button"
-          onClick={() => sounds.startAlarm()}
-          className="mt-6 flex w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-medium text-slate-100 transition hover:bg-white/10"
+          onClick={markDone}
+          disabled={busy}
+          className="w-full rounded-full bg-white py-4 text-lg font-semibold text-[#0B1020] transition active:scale-[0.98] disabled:opacity-50"
         >
-          Turn sound on
+          Done
         </button>
+        <div className="flex w-full justify-between px-2">
+          <button onClick={snooze} disabled={busy} className="py-3 text-base text-white/70 disabled:opacity-50">
+            Snooze {SNOOZE_MINUTES} min
+          </button>
+          <button onClick={close} disabled={busy} className="py-3 text-base text-white/70 disabled:opacity-50">
+            Stop
+          </button>
+        </div>
       </div>
     </div>
   )

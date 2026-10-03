@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "@supabase/supabase-js"
+import { signToken } from "../_shared/actionToken.ts"
 import { sendPushToUser } from "../_shared/sendPush.ts"
 
 const corsHeaders = {
@@ -105,6 +106,13 @@ Deno.serve(async (req) => {
         console.error("Failed to create reminder message", createMessageError)
       }
 
+      let actionToken: string | undefined
+      try {
+        actionToken = await signToken({ rid: reminder.id, uid: reminder.user_id }, 6 * 60 * 60)
+      } catch (tokenError) {
+        console.error("Could not sign action token", tokenError)
+      }
+
       try {
         await sendPushToUser(serviceClient, reminder.user_id, {
           title: "Companion",
@@ -118,6 +126,8 @@ Deno.serve(async (req) => {
             task: reminder.task,
             dueAt: reminder.due_at,
             recurring: reminder.recurrence ?? null,
+            actionToken,
+            actionUrl: `${supabaseUrl}/functions/v1/reminder-action`,
             url: `/chat?alarm=${encodeURIComponent(JSON.stringify({
               reminderId: reminder.id,
               task: reminder.task,
