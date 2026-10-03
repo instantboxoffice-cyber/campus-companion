@@ -76,20 +76,7 @@ function received() {
   playTone({ frequency: 783.99, duration: 0.14, startTime: 0.14, type: 'sine', gain: 0.13 })
 }
 
-let lastClickAt = 0
 let alarmInterval = null
-
-function click() {
-  if (isMuted()) return
-  // Throttled so a fast run of clicks (or a stray double-fire) can't pile
-  // sounds on top of each other and turn into noise.
-  const now = performance.now()
-  if (now - lastClickAt < 45) return
-  lastClickAt = now
-  // Very short, quiet, high "tick" - meant to sit in the background, not
-  // compete with sent()/received() for attention.
-  playTone({ frequency: 1000, duration: 0.035, type: 'sine', gain: 0.06 })
-}
 
 function startAlarm() {
   const ctx = getAudioContext()
@@ -117,46 +104,13 @@ function alarmIsAudible() {
   return Boolean(alarmInterval)
 }
 
-function isInteractiveTarget(el) {
-  if (!el || typeof el.closest !== 'function') return null
-  return el.closest(
-    'button, [role="button"], a[href], input[type="submit"], input[type="button"]'
-  )
-}
-
-let globalClickListenerAttached = false
-
-// Call this ONCE at app startup (see wiring note). Delegates from
-// document root rather than wiring onClick on every button individually -
-// any button anywhere in the app, present or future, gets the click sound
-// automatically. Opt an individual element out with data-no-click-sound.
-function attachGlobalClickSound() {
-  if (typeof document === 'undefined') return
-  if (globalClickListenerAttached) return
-  globalClickListenerAttached = true
-
-  document.addEventListener(
-    'click',
-    (e) => {
-      const target = isInteractiveTarget(e.target)
-      if (!target) return
-      if (target.disabled) return
-      if (target.dataset.noClickSound !== undefined) return
-      click()
-    },
-    { capture: true }
-  )
-}
-
 export const sounds = {
   sent,
   received,
-  click,
   startAlarm,
   stopAlarm,
   alarmIsAudible,
   isMuted,
   setMuted,
   toggleMuted,
-  attachGlobalClickSound,
 }

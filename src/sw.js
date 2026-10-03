@@ -38,6 +38,14 @@ async function handlePush(event) {
     if (appIsFocused) return
   }
 
+  if (payload.data?.type === 'dm') {
+    const sameChatOpen = openClients.some((client) => {
+      const url = new URL(client.url)
+      return client.focused && url.pathname === payload.data.url
+    })
+    if (sameChatOpen) return
+  }
+
   const title = payload.title || 'Companion'
   const options = {
     body: payload.body || 'You have a reminder.',
@@ -56,7 +64,33 @@ async function handlePush(event) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const alarmPayload = event.notification.data || {}
+  const data = event.notification.data || {}
+
+  if (data.type === 'dm') {
+    event.waitUntil((async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const existingWindow = windows.find((client) => new URL(client.url).pathname === data.url)
+
+      if (existingWindow) {
+        try {
+          await existingWindow.focus()
+          try {
+            await existingWindow.navigate(data.url)
+          } catch {
+            // ignore navigation failure and fall through to opening a fresh window
+          }
+          return
+        } catch {
+          // ignore focus failure and fall through to openWindow below
+        }
+      }
+
+      await clients.openWindow(data.url)
+    })())
+    return
+  }
+
+  const alarmPayload = data
   const rawAlarm = alarmPayload.reminderId ? JSON.stringify({
     reminderId: alarmPayload.reminderId,
     task: alarmPayload.task,

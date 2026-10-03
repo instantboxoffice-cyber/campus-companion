@@ -9,6 +9,13 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/parse-reminder/deno.json"
 entrypoint = "./functions/check-due-reminders/index.ts"
+
+[functions.notify-dm]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/notify-dm/index.ts"
+
 [functions.transcribe]
 enabled = true
 verify_jwt = false
