@@ -78,12 +78,15 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
   const readyRef = useRef(false)
   const activeRef = useRef(isActive)
   const soundRef = useRef(soundOn)
+  const needsRestartRef = useRef(false)
+  const hasPlayedRef = useRef(false)
   const lastTap = useRef(0)
   const tapTimer = useRef(null)
   const [paused, setPaused] = useState(false)
   const [hearts, setHearts] = useState(0)
 
   // Make the real player match what the screen should be doing right now.
+  // Only the reel on screen may play. The others are only loaded and kept paused.
   const sync = useCallback(() => {
     const p = playerRef.current
     if (!p || !readyRef.current) return
@@ -91,10 +94,13 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
       if (soundRef.current) p.unMute()
       else p.mute()
       if (activeRef.current) {
+        if (needsRestartRef.current) {
+          p.seekTo(0, true)
+          needsRestartRef.current = false
+        }
         p.playVideo()
       } else {
         p.pauseVideo()
-        p.seekTo(0, true)
       }
     } catch {
       /* player not ready yet */
@@ -104,7 +110,13 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
   useEffect(() => {
     activeRef.current = isActive
     soundRef.current = soundOn
-    if (isActive) setPaused(false)
+    if (isActive) {
+      setPaused(false)
+      hasPlayedRef.current = true
+    } else if (hasPlayedRef.current) {
+      // When you swipe back to a reel you already watched, start it from the beginning.
+      needsRestartRef.current = true
+    }
     sync()
   }, [isActive, soundOn, sync])
 
@@ -138,6 +150,11 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
             sync()
           },
           onStateChange: (e) => {
+            // 1 = playing. If a reel that is NOT on screen starts playing, stop it right away.
+            if (e.data === 1 && !activeRef.current) {
+              e.target.pauseVideo()
+              return
+            }
             // 0 = ended: start again so it loops
             if (e.data === 0 && activeRef.current) {
               e.target.seekTo(0)
