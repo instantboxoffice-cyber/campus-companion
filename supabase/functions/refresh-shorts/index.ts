@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 
 const YT = "https://www.googleapis.com/youtube/v3"
 const MAX_SECONDS = 180 // YouTube Shorts can be up to 3 minutes
-const KEEP_NEWEST = 300
+const KEEP_NEWEST = 3000 // how many reels to keep in the pool
 const REGION = "NG"
 
 const corsHeaders = {
@@ -48,12 +48,22 @@ async function resolveChannelId(value: string, apiKey: string): Promise<string |
 
 async function idsForChannel(channelId: string, apiKey: string): Promise<string[]> {
   // A channel's uploads playlist id is its channel id with "UC" swapped for "UU".
-  const data = await yt(
-    "playlistItems",
-    { part: "contentDetails", playlistId: "UU" + channelId.slice(2), maxResults: "25" },
-    apiKey,
-  )
-  return (data.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean)
+  // Read up to 3 pages (150 newest uploads). Each page costs only 1 quota unit.
+  const ids: string[] = []
+  let pageToken = ""
+  for (let page = 0; page < 3; page++) {
+    const params: Record<string, string> = {
+      part: "contentDetails",
+      playlistId: "UU" + channelId.slice(2),
+      maxResults: "50",
+    }
+    if (pageToken) params.pageToken = pageToken
+    const data = await yt("playlistItems", params, apiKey)
+    ids.push(...(data.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean))
+    pageToken = data.nextPageToken ?? ""
+    if (!pageToken) break
+  }
+  return ids
 }
 
 async function idsForSearch(query: string, apiKey: string): Promise<string[]> {
@@ -79,7 +89,7 @@ async function detailsFor(ids: string[], apiKey: string) {
   for (let i = 0; i < ids.length; i += 50) {
     const data = await yt(
       "videos",
-      { part: "snippet,contentDetails,status", id: ids.slice(i, i + 50).join(",") },
+      { part: "snippet,contentDetails,status,statistics", id: ids.slice(i, i + 50).join(",") },
       apiKey,
     )
     out.push(...(data.items ?? []))
@@ -154,6 +164,7 @@ Deno.serve(async (req) => {
           channel_title: v.snippet.channelTitle,
           thumbnail_url: v.snippet.thumbnails?.medium?.url ?? v.snippet.thumbnails?.high?.url ?? null,
           duration_seconds: parseDuration(v.contentDetails.duration),
+          view_count: Number(v.statistics?.viewCount ?? 0),
           published_at: v.snippet.publishedAt,
           source_id: source.id,
           fetched_at: new Date().toISOString(),
