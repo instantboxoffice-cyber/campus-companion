@@ -77,6 +77,7 @@ function received() {
 }
 
 let lastClickAt = 0
+let alarmInterval = null
 
 function click() {
   if (isMuted()) return
@@ -88,6 +89,32 @@ function click() {
   // Very short, quiet, high "tick" - meant to sit in the background, not
   // compete with sent()/received() for attention.
   playTone({ frequency: 1000, duration: 0.035, type: 'sine', gain: 0.06 })
+}
+
+function startAlarm() {
+  const ctx = getAudioContext()
+  if (!ctx) return
+
+  stopAlarm()
+
+  const playAlarm = () => {
+    playTone({ frequency: 880, duration: 0.35, type: 'sawtooth', gain: 0.12 })
+    playTone({ frequency: 660, duration: 0.35, startTime: 0.12, type: 'square', gain: 0.09 })
+  }
+
+  playAlarm()
+  alarmInterval = window.setInterval(playAlarm, 700)
+}
+
+function stopAlarm() {
+  if (alarmInterval) {
+    window.clearInterval(alarmInterval)
+    alarmInterval = null
+  }
+}
+
+function alarmIsAudible() {
+  return Boolean(alarmInterval)
 }
 
 function isInteractiveTarget(el) {
@@ -125,6 +152,9 @@ export const sounds = {
   sent,
   received,
   click,
+  startAlarm,
+  stopAlarm,
+  alarmIsAudible,
   isMuted,
   setMuted,
   toggleMuted,

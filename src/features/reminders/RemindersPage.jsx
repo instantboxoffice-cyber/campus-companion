@@ -57,10 +57,40 @@ export default function RemindersPage() {
     }
   }
 
+  async function triggerTestAlarm() {
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData?.user?.id
+    if (!userId) return
+
+    const dueAt = new Date(Date.now() + 1000).toISOString()
+    const task = 'Test reminder alarm'
+
+    const { error } = await supabase.from('reminders').insert({
+      user_id: userId,
+      task,
+      due_at: dueAt,
+      status: 'pending',
+      recurrence: null,
+    })
+
+    if (!error) {
+      window.dispatchEvent(new CustomEvent('companion:test-alarm', { detail: { task, dueAt } }))
+    }
+  }
+
   return (
     <div className="app-screen flex flex-col bg-white">
       <header className="bg-primary-dark px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] text-white">
-        <h1 className="text-2xl font-bold">Reminders</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">Reminders</h1>
+          <button
+            type="button"
+            onClick={triggerTestAlarm}
+            className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/15"
+          >
+            Test alarm
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto">

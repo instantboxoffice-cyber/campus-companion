@@ -111,7 +111,20 @@ Deno.serve(async (req) => {
           body: `Reminder: ${reminder.task}`,
           url: "/chat",
           tag: `reminder-${reminder.id}`,
-          type: "reminder",
+          type: "REMINDER_ALARM",
+          data: {
+            type: "REMINDER_ALARM",
+            reminderId: reminder.id,
+            task: reminder.task,
+            dueAt: reminder.due_at,
+            recurring: reminder.recurrence ?? null,
+            url: `/chat?alarm=${encodeURIComponent(JSON.stringify({
+              reminderId: reminder.id,
+              task: reminder.task,
+              dueAt: reminder.due_at,
+              recurring: reminder.recurrence ?? null,
+            }))}`,
+          },
           urgency: "high",
           ttl: 3600,
         })

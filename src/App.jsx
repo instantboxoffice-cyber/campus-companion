@@ -11,6 +11,7 @@ import UsernameGate from './features/friends/UsernameGate'
 import ProtectedRoute from './routes/ProtectedRoute'
 import InstallPrompt from './components/InstallPrompt'
 import DeliveryTracker from './features/chat/DeliveryTracker'
+import AlarmHost from './features/reminders/AlarmHost'
 import { sounds } from './lib/sounds'
 
    sounds.attachGlobalClickSound()
@@ -73,6 +74,7 @@ function App() {
       <InstallPrompt />
       <UsernameGate />
       <DeliveryTracker />
+      <AlarmHost />
     </BrowserRouter>
   )
 }

@@ -22,6 +22,7 @@ type PushOptions = {
   url?: string
   tag?: string
   type?: string
+  data?: Record<string, string | number | boolean | null | undefined>
   // "high" tells the push service to try harder to wake a dozing phone -
   // worth it for something time-sensitive like a reminder. Leave unset
   // for things like a chat reply, where the library's normal default is fine.
@@ -42,7 +43,7 @@ type PushOptions = {
 export async function sendPushToUser(serviceClient, userId, options: PushOptions) {
   ensureVapidConfigured()
 
-  const { title, body, url, tag, type, urgency, ttl } = options
+  const { title, body, url, tag, type, data, urgency, ttl } = options
 
   const { data: subscriptions, error } = await serviceClient
     .from("push_subscriptions")
@@ -62,7 +63,16 @@ export async function sendPushToUser(serviceClient, userId, options: PushOptions
       keys: { auth: subscription.auth, p256dh: subscription.p256dh },
     }
 
-    const payload = JSON.stringify({ title, body, tag, data: { url, type } })
+    const payload = JSON.stringify({
+      title,
+      body,
+      tag,
+      data: {
+        ...(data ?? {}),
+        url: data?.url ?? url ?? '/',
+        type: data?.type ?? type ?? 'reminder',
+      },
+    })
 
     try {
       await webPush.sendNotification(pushSubscription, payload, {
