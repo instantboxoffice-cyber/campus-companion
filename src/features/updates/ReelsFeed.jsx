@@ -83,7 +83,7 @@ const PauseIcon = () => (
 )
 
 // ---------- one full-screen reel ----------
-function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onLike, onOpenComments, onPlaying }) {
+function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onLike, onOpenComments, onPlaying, blocked, onBlocked, onUnblock }) {
   const hostRef = useRef(null)
   const playerRef = useRef(null)
   const readyRef = useRef(false)
@@ -91,6 +91,8 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
   const soundRef = useRef(soundOn)
   const needsRestartRef = useRef(false)
   const onPlayingRef = useRef(onPlaying)
+  const onBlockedRef = useRef(onBlocked)
+  const blockTimerRef = useRef(null)
   const hasPlayedRef = useRef(false)
   const lastTap = useRef(0)
   const tapTimer = useRef(null)
@@ -112,7 +114,19 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
           needsRestartRef.current = false
         }
         p.playVideo()
+        clearTimeout(blockTimerRef.current)
+        if (soundRef.current) {
+          blockTimerRef.current = setTimeout(() => {
+            try {
+              const state = p.getPlayerState()
+              if (activeRef.current && soundRef.current && (state === -1 || state === 5)) onBlockedRef.current?.()
+            } catch {
+              /* ignore */
+            }
+          }, 2500)
+        }
       } else {
+        clearTimeout(blockTimerRef.current)
         p.pauseVideo()
       }
     } catch {
@@ -124,6 +138,7 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
     activeRef.current = isActive
     soundRef.current = soundOn
     onPlayingRef.current = onPlaying
+    onBlockedRef.current = onBlocked
     if (isActive) {
       setPaused(false)
       hasPlayedRef.current = true
@@ -132,7 +147,7 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
       needsRestartRef.current = true
     }
     sync()
-  }, [isActive, soundOn, sync, onPlaying])
+  }, [isActive, soundOn, sync, onPlaying, onBlocked])
 
   // Create the player early (for the next few reels) so they are ready before you swipe.
   useEffect(() => {
@@ -159,6 +174,9 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
           playlist: video.video_id,
         },
         events: {
+          onAutoplayBlocked: () => {
+            if (activeRef.current) onBlockedRef.current?.()
+          },
           onReady: (e) => {
             readyRef.current = true
             // Ask YouTube for a smaller picture to save data (YouTube may ignore this).
@@ -194,6 +212,7 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
     return () => {
       cancelled = true
       readyRef.current = false
+      clearTimeout(blockTimerRef.current)
       try {
         playerRef.current?.destroy()
       } catch {
@@ -206,6 +225,10 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
 
   // One tap = pause/play. Double tap = like.
   function handleTap() {
+    if (blocked) {
+      onUnblock()
+      return
+    }
     const now = Date.now()
     if (now - lastTap.current < 300) {
       clearTimeout(tapTimer.current)
@@ -273,6 +296,15 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white/80">
           <PauseIcon />
         </div>
+      )}
+
+      {blocked && isActive && (
+        <button
+          onClick={onUnblock}
+          className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/70 px-4 py-2 text-sm font-medium text-white"
+        >
+          Tap for sound
+        </button>
       )}
 
       {hearts > 0 && (
@@ -501,7 +533,14 @@ export default function ReelsFeed() {
   const [items, setItems] = useState(null) // null = loading
   const [failed, setFailed] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [soundOn, setSoundOn] = useState(false)
+  const [soundOn, setSoundOn] = useState(() => {
+    try {
+      return localStorage.getItem('reels_sound') !== 'off'
+    } catch {
+      return true
+    }
+  })
+  const [blocked, setBlocked] = useState(false)
   const [commentFor, setCommentFor] = useState(null)
   const [uid, setUid] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -602,6 +641,20 @@ export default function ReelsFeed() {
     return () => clearTimeout(timer)
   }, [items, activeIndex])
 
+  function toggleSound() {
+    if (blocked) {
+      setBlocked(false)
+      return
+    }
+    const next = !soundOn
+    setSoundOn(next)
+    try {
+      localStorage.setItem('reels_sound', next ? 'on' : 'off')
+    } catch {
+      /* ignore */
+    }
+  }
+
   function patchVideo(videoId, patch) {
     setItems((list) => list?.map((v) => (v.video_id === videoId ? { ...v, ...patch(v) } : v)))
   }
@@ -667,8 +720,11 @@ export default function ReelsFeed() {
                 startedKey === items[settledIndex]?.key)
             }
             onPlaying={() => setStartedKey(video.key)}
-            soundOn={soundOn}
-            onToggleSound={() => setSoundOn((on) => !on)}
+            soundOn={soundOn && !blocked}
+            blocked={blocked}
+            onBlocked={() => setBlocked(true)}
+            onUnblock={() => setBlocked(false)}
+            onToggleSound={toggleSound}
             onLike={toggleLike}
             onOpenComments={setCommentFor}
           />
@@ -694,6 +750,15 @@ export default function ReelsFeed() {
           <RefreshIcon spinning={refreshing} />
         </button>
       </div>
+
+      {blocked && soundOn && items?.length > 0 && (
+        <button
+          onClick={() => setBlocked(false)}
+          className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+4rem)] z-20 -translate-x-1/2 rounded-full bg-black/70 px-4 py-2 text-sm font-medium text-white"
+        >
+          Tap for sound
+        </button>
+      )}
 
       {commentFor && (
         <CommentsSheet
