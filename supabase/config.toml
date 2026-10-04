@@ -39,3 +39,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/parse-reminder/deno.json"
 entrypoint = "./functions/refresh-shorts/index.ts"
+
+[functions.youtube-comments]
+enabled = true
+verify_jwt = false
+import_map = "./functions/parse-reminder/deno.json"
+entrypoint = "./functions/youtube-comments/index.ts"

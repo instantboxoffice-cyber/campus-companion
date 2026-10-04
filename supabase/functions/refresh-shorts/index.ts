@@ -188,6 +188,8 @@ Deno.serve(async (req) => {
           thumbnail_url: v.snippet.thumbnails?.medium?.url ?? v.snippet.thumbnails?.high?.url ?? null,
           duration_seconds: parseDuration(v.contentDetails.duration),
           view_count: Number(v.statistics?.viewCount ?? 0),
+          yt_like_count: Number(v.statistics?.likeCount ?? 0),
+          yt_comment_count: Number(v.statistics?.commentCount ?? 0),
           published_at: v.snippet.publishedAt,
           source_id: source.id,
           fetched_at: new Date().toISOString(),

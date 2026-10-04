@@ -286,7 +286,10 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
 
 // ---------- comments sheet ----------
 function CommentsSheet({ video, uid, onClose, onCountChange }) {
+  const [tab, setTab] = useState('youtube')
   const [comments, setComments] = useState(null)
+  const [ytComments, setYtComments] = useState(null)
+  const [ytNote, setYtNote] = useState('')
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -295,6 +298,7 @@ function CommentsSheet({ video, uid, onClose, onCountChange }) {
 
   useEffect(() => {
     let cancelled = false
+
     supabase
       .from('reel_comments')
       .select(columns)
@@ -306,6 +310,28 @@ function CommentsSheet({ video, uid, onClose, onCountChange }) {
         if (err) setError("Couldn't load comments.")
         setComments(data ?? [])
       })
+
+    supabase.functions
+      .invoke('youtube-comments', { body: { video_id: video.video_id } })
+      .then(({ data, error: err }) => {
+        if (cancelled) return
+        if (err || !data) {
+          setYtComments([])
+          setYtNote('YouTube comments are unavailable right now.')
+          return
+        }
+        const list = Array.isArray(data.comments) ? data.comments : []
+        setYtComments(list)
+        if (data.disabled) setYtNote('Comments are disabled on YouTube for this video.')
+        else if (!list.length) setYtNote('No comments on YouTube yet.')
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setYtComments([])
+          setYtNote('YouTube comments are unavailable right now.')
+        }
+      })
+
     return () => {
       cancelled = true
     }
@@ -338,64 +364,109 @@ function CommentsSheet({ video, uid, onClose, onCountChange }) {
     onCountChange(video.video_id, -1)
   }
 
+  const tabClass = (name) =>
+    `flex-1 py-2 text-sm font-medium ${tab === name ? 'border-b-2 border-primary text-white' : 'text-white/50'}`
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col justify-end bg-black/50" onClick={onClose}>
       <div
-        className="flex h-[70%] flex-col rounded-t-2xl bg-primary-dark text-white"
+        className="flex h-[75%] flex-col rounded-t-2xl bg-primary-dark text-white"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div className="flex items-center justify-between px-4 pt-3">
           <p className="text-sm font-semibold">Comments</p>
           <button onClick={onClose} className="px-2 text-xl leading-none text-white/70" aria-label="Close">
             ×
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          {comments === null && <p className="text-center text-sm text-white/50">Loading…</p>}
-          {comments?.length === 0 && (
-            <p className="mt-8 text-center text-sm text-white/50">No comments yet. Be the first.</p>
-          )}
-          {comments?.map((c) => (
-            <div key={c.id} className="mb-4 flex gap-3">
-              <Avatar
-                size="sm"
-                src={c.profiles?.avatar_url}
-                label={(c.profiles?.username ?? 'S').charAt(0).toUpperCase()}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-white/60">
-                  {c.profiles?.username ?? 'student'} · {timeAgo(c.created_at)}
-                </p>
-                <p className="break-words text-sm">{c.body}</p>
-              </div>
-              {c.user_id === uid && (
-                <button onClick={() => remove(c.id)} className="self-start text-xs text-white/40">
-                  Delete
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {error && <p className="px-4 pb-1 text-xs text-red-400">{error}</p>}
-        <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-            maxLength={500}
-            placeholder="Add a comment…"
-            className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2 text-white outline-none placeholder:text-white/40"
-          />
-          <button
-            onClick={send}
-            disabled={!text.trim() || sending}
-            className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-          >
-            Post
+        <div className="flex border-b border-white/10">
+          <button onClick={() => setTab('youtube')} className={tabClass('youtube')}>
+            YouTube
+          </button>
+          <button onClick={() => setTab('campus')} className={tabClass('campus')}>
+            Campus Companion{comments ? ` (${comments.length})` : ''}
           </button>
         </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          {tab === 'youtube' && (
+            <>
+              {ytComments === null && <p className="text-center text-sm text-white/50">Loading…</p>}
+              {ytComments?.length === 0 && (
+                <p className="mt-8 text-center text-sm text-white/50">{ytNote || 'No comments on YouTube yet.'}</p>
+              )}
+              {ytComments?.map((c) => (
+                <div key={c.id} className="mb-4 flex gap-3">
+                  <Avatar size="sm" src={c.avatar} label={(c.author ?? 'Y').replace('@', '').charAt(0).toUpperCase()} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-white/60">
+                      {c.author}
+                      {c.published_at ? ` · ${timeAgo(c.published_at)}` : ''}
+                    </p>
+                    <p className="whitespace-pre-line break-words text-sm">{c.text}</p>
+                    {c.likes > 0 && <p className="mt-0.5 text-xs text-white/50">♥ {formatCount(c.likes)}</p>}
+                  </div>
+                </div>
+              ))}
+              {ytComments?.length > 0 && (
+                <p className="pb-2 text-center text-xs text-white/40">
+                  YouTube comments are read only. Use the Campus Companion tab to comment.
+                </p>
+              )}
+            </>
+          )}
+
+          {tab === 'campus' && (
+            <>
+              {comments === null && <p className="text-center text-sm text-white/50">Loading…</p>}
+              {comments?.length === 0 && (
+                <p className="mt-8 text-center text-sm text-white/50">No comments yet. Be the first.</p>
+              )}
+              {comments?.map((c) => (
+                <div key={c.id} className="mb-4 flex gap-3">
+                  <Avatar
+                    size="sm"
+                    src={c.profiles?.avatar_url}
+                    label={(c.profiles?.username ?? 'S').charAt(0).toUpperCase()}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-white/60">
+                      {c.profiles?.username ?? 'student'} · {timeAgo(c.created_at)}
+                    </p>
+                    <p className="break-words text-sm">{c.body}</p>
+                  </div>
+                  {c.user_id === uid && (
+                    <button onClick={() => remove(c.id)} className="self-start text-xs text-white/40">
+                      Delete
+                    </button>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {error && tab === 'campus' && <p className="px-4 pb-1 text-xs text-red-400">{error}</p>}
+        {tab === 'campus' && (
+          <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2">
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && send()}
+              maxLength={500}
+              placeholder="Add a comment…"
+              className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2 text-white outline-none placeholder:text-white/40"
+            />
+            <button
+              onClick={send}
+              disabled={!text.trim() || sending}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Post
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
