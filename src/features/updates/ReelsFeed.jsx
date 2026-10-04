@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import Avatar from '../../components/Avatar'
 
@@ -20,6 +20,17 @@ function loadYouTubeApi() {
     document.head.appendChild(tag)
   })
   return ytPromise
+}
+
+// ---------- network check ----------
+// Phones can tell us if the user turned on Data Saver or has a slow connection.
+function getNetwork() {
+  const c = typeof navigator !== 'undefined' ? navigator.connection : undefined
+  const type = c?.effectiveType ?? ''
+  return {
+    saveData: c?.saveData === true,
+    slow: c?.saveData === true || type === 'slow-2g' || type === '2g' || type === '3g',
+  }
 }
 
 // ---------- small helpers ----------
@@ -72,17 +83,19 @@ const PauseIcon = () => (
 )
 
 // ---------- one full-screen reel ----------
-function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onLike, onOpenComments }) {
+function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onLike, onOpenComments, onPlaying }) {
   const hostRef = useRef(null)
   const playerRef = useRef(null)
   const readyRef = useRef(false)
   const activeRef = useRef(isActive)
   const soundRef = useRef(soundOn)
   const needsRestartRef = useRef(false)
+  const onPlayingRef = useRef(onPlaying)
   const hasPlayedRef = useRef(false)
   const lastTap = useRef(0)
   const tapTimer = useRef(null)
   const [paused, setPaused] = useState(false)
+  const [buffering, setBuffering] = useState(true)
   const [hearts, setHearts] = useState(0)
 
   // Make the real player match what the screen should be doing right now.
@@ -110,6 +123,7 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
   useEffect(() => {
     activeRef.current = isActive
     soundRef.current = soundOn
+    onPlayingRef.current = onPlaying
     if (isActive) {
       setPaused(false)
       hasPlayedRef.current = true
@@ -118,7 +132,7 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
       needsRestartRef.current = true
     }
     sync()
-  }, [isActive, soundOn, sync])
+  }, [isActive, soundOn, sync, onPlaying])
 
   // Create the player early (for the next few reels) so they are ready before you swipe.
   useEffect(() => {
@@ -145,8 +159,14 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
           playlist: video.video_id,
         },
         events: {
-          onReady: () => {
+          onReady: (e) => {
             readyRef.current = true
+            // Ask YouTube for a smaller picture to save data (YouTube may ignore this).
+            try {
+              e.target.setPlaybackQuality(getNetwork().slow ? 'small' : 'medium')
+            } catch {
+              /* ignore */
+            }
             sync()
           },
           onStateChange: (e) => {
@@ -154,6 +174,12 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
             if (e.data === 1 && !activeRef.current) {
               e.target.pauseVideo()
               return
+            }
+            if (e.data === 1) {
+              setBuffering(false)
+              onPlayingRef.current?.()
+            } else if (e.data === 3) {
+              setBuffering(true)
             }
             // 0 = ended: start again so it loops
             if (e.data === 0 && activeRef.current) {
@@ -237,6 +263,12 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/80 to-transparent" />
 
+      {isActive && buffering && !paused && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+        </div>
+      )}
+
       {paused && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white/80">
           <PauseIcon />
@@ -286,7 +318,7 @@ function Reel({ video, index, isActive, shouldMount, soundOn, onToggleSound, onL
 
 // ---------- comments sheet ----------
 function CommentsSheet({ video, uid, onClose, onCountChange }) {
-  const [tab, setTab] = useState('youtube')
+  const [tab, setTab] = useState('youtube') // 'youtube' (read only) or 'campus'
   const [comments, setComments] = useState(null)
   const [ytComments, setYtComments] = useState(null)
   const [ytNote, setYtNote] = useState('')
@@ -298,7 +330,6 @@ function CommentsSheet({ video, uid, onClose, onCountChange }) {
 
   useEffect(() => {
     let cancelled = false
-
     supabase
       .from('reel_comments')
       .select(columns)
@@ -317,19 +348,12 @@ function CommentsSheet({ video, uid, onClose, onCountChange }) {
         if (cancelled) return
         if (err || !data) {
           setYtComments([])
-          setYtNote('YouTube comments are unavailable right now.')
+          setYtNote("Couldn't load YouTube comments.")
           return
         }
-        const list = Array.isArray(data.comments) ? data.comments : []
-        setYtComments(list)
-        if (data.disabled) setYtNote('Comments are disabled on YouTube for this video.')
-        else if (!list.length) setYtNote('No comments on YouTube yet.')
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setYtComments([])
-          setYtNote('YouTube comments are unavailable right now.')
-        }
+        setYtComments(data.comments ?? [])
+        if (data.disabled) setYtNote('Comments are turned off on YouTube for this video.')
+        else if (data.unavailable && !(data.comments ?? []).length) setYtNote('YouTube comments are not available right now.')
       })
 
     return () => {
@@ -481,6 +505,9 @@ export default function ReelsFeed() {
   const [commentFor, setCommentFor] = useState(null)
   const [uid, setUid] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [settledIndex, setSettledIndex] = useState(0)
+  const [startedKey, setStartedKey] = useState(null)
+  const [network] = useState(getNetwork)
 
   const containerRef = useRef(null)
   const itemsRef = useRef([])
@@ -558,6 +585,13 @@ export default function ReelsFeed() {
     return () => observer.disconnect()
   }, [items])
 
+  // Wait 250 ms after you stop swiping before loading a reel's player.
+  // This saves data when you skip quickly through many reels.
+  useEffect(() => {
+    const t = setTimeout(() => setSettledIndex(activeIndex), 250)
+    return () => clearTimeout(t)
+  }, [activeIndex])
+
   // Count a view once a reel has been on screen for 1.5 seconds.
   useEffect(() => {
     const video = items?.[activeIndex]
@@ -623,7 +657,16 @@ export default function ReelsFeed() {
             video={video}
             index={index}
             isActive={index === activeIndex}
-            shouldMount={index >= activeIndex - 1 && index <= activeIndex + 2}
+            shouldMount={
+              index === settledIndex ||
+              index === settledIndex - 1 ||
+              // The next reel is only loaded AFTER the current one has started playing,
+              // and never when Data Saver is on. This way the reel you watch gets all the data first.
+              (index === settledIndex + 1 &&
+                !network.saveData &&
+                startedKey === items[settledIndex]?.key)
+            }
+            onPlaying={() => setStartedKey(video.key)}
             soundOn={soundOn}
             onToggleSound={() => setSoundOn((on) => !on)}
             onLike={toggleLike}
